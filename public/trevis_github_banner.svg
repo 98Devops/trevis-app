@@ -1,0 +1,64 @@
+<svg width="100%" viewBox="0 0 710 410" role="img" xmlns="http://www.w3.org/2000/svg" style="">
+  <title style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">Trevis — GitHub repository banner</title>
+  <desc style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">Dark banner for the Trevis student accommodation property management platform</desc>
+
+  <rect width="680" height="280" fill="#0D0F14" rx="0" style="fill:rgb(13, 15, 20);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+  <!-- Grid texture -->
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#ffffff" stroke-width="0.3" opacity="0.06"/>
+    </pattern>
+    <linearGradient id="fadeL" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0D0F14" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#0D0F14" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="fadeR" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0D0F14" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#0D0F14" stop-opacity="1"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="680" height="280" fill="url(#grid)" style="stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <rect width="160" height="280" fill="url(#fadeL)" style="stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <rect x="520" width="160" height="280" fill="url(#fadeR)" style="stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+  <!-- Accent glow circles -->
+  <circle cx="80" cy="60" r="90" fill="#F5A623" opacity="0.04" style="fill:rgb(245, 166, 35);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.04;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <circle cx="600" cy="220" r="100" fill="#22D3EE" opacity="0.05" style="fill:rgb(34, 211, 238);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.05;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <circle cx="340" cy="280" r="120" fill="#A78BFA" opacity="0.03" style="fill:rgb(167, 139, 250);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.03;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+  <!-- Property accent dots row -->
+  <circle cx="270" cy="68" r="5" fill="#22D3EE" opacity="0.9" style="fill:rgb(34, 211, 238);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.9;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <circle cx="288" cy="68" r="5" fill="#A78BFA" opacity="0.9" style="fill:rgb(167, 139, 250);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.9;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <circle cx="306" cy="68" r="5" fill="#F59E0B" opacity="0.9" style="fill:rgb(245, 158, 11);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.9;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <circle cx="324" cy="68" r="5" fill="#34D399" opacity="0.9" style="fill:rgb(52, 211, 153);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.9;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+  <!-- Main wordmark -->
+  <text x="340" y="148" text-anchor="middle" font-family="'Sora', 'Arial Black', sans-serif" font-size="72" font-weight="800" letter-spacing="-2" fill="#F5A623" style="fill:rgb(245, 166, 35);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Sora, &quot;Arial Black&quot;, sans-serif;font-size:72px;font-weight:800;text-anchor:middle;dominant-baseline:auto">TREVIS</text>
+
+  <!-- Tagline -->
+  <text x="340" y="178" text-anchor="middle" font-family="'Sora', Arial, sans-serif" font-size="14" font-weight="400" letter-spacing="4" fill="#6B7280" style="fill:rgb(107, 114, 128);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Sora, Arial, sans-serif;font-size:14px;font-weight:400;text-anchor:middle;dominant-baseline:auto">STUDENT ACCOMMODATION · PROPERTY MANAGEMENT</text>
+
+  <!-- Divider line -->
+  <line x1="240" y1="194" x2="440" y2="194" stroke="#232836" stroke-width="1" style="fill:rgb(0, 0, 0);stroke:rgb(35, 40, 54);color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+  <!-- Stats row -->
+  <text x="254" y="218" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="13" font-weight="700" fill="#E8EAF0" style="fill:rgb(232, 234, 240);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;IBM Plex Mono&quot;, monospace;font-size:13px;font-weight:700;text-anchor:middle;dominant-baseline:auto">4</text>
+  <text x="254" y="233" text-anchor="middle" font-family="'Sora', Arial, sans-serif" font-size="10" letter-spacing="1" fill="#6B7280" style="fill:rgb(107, 114, 128);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Sora, Arial, sans-serif;font-size:10px;font-weight:400;text-anchor:middle;dominant-baseline:auto">PROPERTIES</text>
+
+  <line x1="300" y1="208" x2="300" y2="238" stroke="#232836" stroke-width="1" style="fill:rgb(0, 0, 0);stroke:rgb(35, 40, 54);color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+  <text x="340" y="218" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="13" font-weight="700" fill="#E8EAF0" style="fill:rgb(232, 234, 240);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;IBM Plex Mono&quot;, monospace;font-size:13px;font-weight:700;text-anchor:middle;dominant-baseline:auto">140+</text>
+  <text x="340" y="233" text-anchor="middle" font-family="'Sora', Arial, sans-serif" font-size="10" letter-spacing="1" fill="#6B7280" style="fill:rgb(107, 114, 128);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Sora, Arial, sans-serif;font-size:10px;font-weight:400;text-anchor:middle;dominant-baseline:auto">STUDENTS</text>
+
+  <line x1="380" y1="208" x2="380" y2="238" stroke="#232836" stroke-width="1" style="fill:rgb(0, 0, 0);stroke:rgb(35, 40, 54);color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+  <text x="426" y="218" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="13" font-weight="700" fill="#22D3EE" style="fill:rgb(34, 211, 238);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;IBM Plex Mono&quot;, monospace;font-size:13px;font-weight:700;text-anchor:middle;dominant-baseline:auto">MVP</text>
+  <text x="426" y="233" text-anchor="middle" font-family="'Sora', Arial, sans-serif" font-size="10" letter-spacing="1" fill="#6B7280" style="fill:rgb(107, 114, 128);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Sora, Arial, sans-serif;font-size:10px;font-weight:400;text-anchor:middle;dominant-baseline:auto">LIVE DEMO</text>
+
+  <!-- Bottom stack -->
+  <text x="340" y="263" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#333d4d" letter-spacing="2" style="fill:rgb(51, 61, 77);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;IBM Plex Mono&quot;, monospace;font-size:10px;font-weight:400;text-anchor:middle;dominant-baseline:auto">
+    REACT · VITE · NETLIFY
+  </text>
+</svg>
