@@ -4,7 +4,7 @@ import { T, font, fmt, Badge, Stat, Bar, Btn } from "./p2_helpers.jsx";
 /* ═══════════════════════════════════════════════════════════
    PROPERTY DETAIL VIEW
 ═══════════════════════════════════════════════════════════ */
-export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, onAddRoom, onStudentClick, isAdmin }) {
+export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, onAddRoom, onStudentClick, isAdmin, onExport }) {
   const prop = props.find(p => p.name === name);
   const ac = T.prop[name] || { accent: T.gold };
   const [search, setSearch] = useState("");
@@ -22,6 +22,7 @@ export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, o
           <h1 style={{ fontSize:26,fontWeight:800,color:T.text,margin:"4px 0 0" }}>{prop.name}</h1>
         </div>
         <div className="pn-header-actions" style={{ display:"flex",gap:10 }}>
+          {onExport && <Btn accent={T.muted} onClick={()=>onExport(name)} style={{color:T.text,fontSize:11}}>↓ Export CSV</Btn>}
           {isAdmin && <Btn accent={T.blue} onClick={onAddRoom} style={{color:"#fff"}}>+ Add Room</Btn>}
           <Btn accent={T.green} onClick={onAddStudent}>+ Add Student</Btn>
           <Btn accent={ac.accent} onClick={onOpenPay}>+ Record Payment</Btn>

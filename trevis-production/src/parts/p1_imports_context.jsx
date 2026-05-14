@@ -129,3 +129,56 @@ export function DataProvider({ children }) {
 
 export { isConfigured, signIn, signOut, getProperties, addRoomSvc, addStudentSvc, removeStudentSvc, recordPaymentSvc, getPaymentsByStudent, getDataFlags };
 
+/* ═══════════════════════════════════════════════════════════
+   ADDITIONAL SERVICE FUNCTIONS (Sprint 3)
+═══════════════════════════════════════════════════════════ */
+export async function saveMonthlySnapshot(monthDate) {
+  if (!isConfigured) return { data: null, error: { message: 'Not configured' } };
+  const { data, error } = await supabase.rpc('save_monthly_snapshot', { p_month: monthDate });
+  return { data, error };
+}
+
+export async function getSnapshots() {
+  if (!isConfigured) return { data: [], error: null };
+  const { data, error } = await supabase.from('monthly_snapshots').select('*, properties(name)').order('snapshot_month', { ascending: false });
+  return { data: data || [], error };
+}
+
+export async function generateObligations(monthDate) {
+  if (!isConfigured) return { data: null, error: { message: 'Not configured' } };
+  const { data, error } = await supabase.rpc('generate_monthly_obligations', { p_month: monthDate });
+  return { data, error };
+}
+
+export async function getSettings() {
+  if (!isConfigured) return { data: {}, error: null };
+  const { data, error } = await supabase.from('settings').select('*');
+  const obj = {};
+  (data || []).forEach(s => { obj[s.key] = s.value; });
+  return { data: obj, error };
+}
+
+export async function updateSetting(key, value) {
+  if (!isConfigured) return { error: { message: 'Not configured' } };
+  const { error } = await supabase.from('settings').upsert({ key, value, updated_at: new Date().toISOString() });
+  return { error };
+}
+
+export async function updateStudent(studentId, updates) {
+  if (!isConfigured) return { error: { message: 'Not configured' } };
+  const { error } = await supabase.from('students').update(updates).eq('id', studentId);
+  return { error };
+}
+
+export async function logReport(userId, reportMonth, reportType) {
+  if (!isConfigured) return { error: null };
+  const { error } = await supabase.from('report_logs').insert({ generated_by: userId, report_month: reportMonth, report_type: reportType });
+  return { error };
+}
+
+export async function updateRoomNotes(roomId, notes) {
+  if (!isConfigured) return { error: { message: 'Not configured' } };
+  const { error } = await supabase.from('rooms').update({ notes }).eq('id', roomId);
+  return { error };
+}
+

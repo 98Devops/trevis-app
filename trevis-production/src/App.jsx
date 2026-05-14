@@ -1,10 +1,11 @@
-import { useState, useMemo, useEffect } from "react";
-import { AuthProvider, useAuth, DataProvider, useData, isConfigured, addRoomSvc, addStudentSvc, removeStudentSvc, recordPaymentSvc, getPaymentsByStudent, getDataFlags } from "./parts/p1_imports_context.jsx";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { AuthProvider, useAuth, DataProvider, useData, isConfigured, addRoomSvc, addStudentSvc, removeStudentSvc, recordPaymentSvc, getPaymentsByStudent, getDataFlags, saveMonthlySnapshot, getSnapshots, generateObligations, logReport, updateRoomNotes } from "./parts/p1_imports_context.jsx";
 import { T, font, globalCSS, fmt, buildProps } from "./parts/p2_helpers.jsx";
 import { LoginScreen, NotConfiguredScreen, AddStudentWizard, AddRoomModal, PaymentModal, StudentProfile } from "./parts/p3_modals.jsx";
 import { Dashboard } from "./parts/p4_dashboard.jsx";
 import { PropertyDetail, Students } from "./parts/p5_views.jsx";
 import { Reports } from "./parts/p6_reports.jsx";
+import { Arrears } from "./parts/p7_arrears.jsx";
 
 /* ═══════════════════════════════════════════════════════════
    NAVIGATION
@@ -12,6 +13,7 @@ import { Reports } from "./parts/p6_reports.jsx";
 const NAV = [
   { id:"dashboard", label:"Dashboard", icon:"⬡" },
   { id:"students",  label:"Students",  icon:"◎" },
+  { id:"arrears",   label:"Arrears",   icon:"◈" },
   { id:"reports",   label:"Reports",   icon:"▦" },
 ];
 
@@ -53,6 +55,9 @@ function AppInner() {
   const [profilePropName, setProfilePropName] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dataFlags, setDataFlags] = useState([]);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(true);
+  const [toast, setToast] = useState(null);
 
   // Build UI props from raw Supabase data or use demo
   const props = useMemo(() => {
@@ -63,6 +68,32 @@ function AppInner() {
   const isAdmin = user?.role === "ADMIN" || user?.role === "admin";
   const isManager = user?.role === "MANAGER" || user?.role === "manager";
   const overdueCount = props.reduce((a,p) => a + p.overdue.length, 0);
+  const arrearsCount = props.reduce((a,p) => a + p.overdue.length, 0);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e) => {
+      // Don't trigger if user is typing in an input
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+      if (e.key === 'Escape') {
+        setShowAddStudent(false); setShowPayment(false); setShowAddRoom(false);
+        setProfileStudent(null); setShowReportModal(false);
+      }
+      if (e.key === 'd' || e.key === 'D') { setView('dashboard'); setSelProp(null); }
+      if (e.key === 'r' || e.key === 'R') { setView('reports'); setSelProp(null); }
+      if (e.key === 'n' || e.key === 'N') { if(isAdmin){setAddStudentProp('');setShowAddStudent(true);} }
+      if (e.key === 'p' || e.key === 'P') { setPaymentProp(null); setShowPayment(true); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isAdmin]);
+
+  // Toast auto-dismiss
+  useEffect(() => {
+    if (toast) { const t = setTimeout(() => setToast(null), 3000); return () => clearTimeout(t); }
+  }, [toast]);
+
+  const showToast = (msg, type='success') => setToast({ msg, type });
 
   // Load data flags for admin
   useEffect(() => {
@@ -113,7 +144,21 @@ function AppInner() {
     }
   };
 
-  const handleExportCSV = () => { setView("reports"); };
+  const handleExportCSV = () => { setShowReportModal(true); };
+
+  // Per-property CSV export
+  const handlePropertyExport = (propName) => {
+    const p = visibleProps.find(x => x.name === propName);
+    if (!p) return;
+    const ts = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+    let csv = `Property,Room,Student,Rent Due,Amount Paid,Balance,Status,Check-in Date,Notes\n`;
+    p.rooms.forEach(r => r.students.filter(s=>s.status!=='VACANT'&&s.status!=='VACATED').forEach(s => {
+      csv += `"${p.name}","${r.no}","${s.name}",${r.rent},${s.paid},${r.rent-s.paid},${s.status},"${s.date||''}","${(s.notes||'').replace(/"/g,"''")}"\n`;
+    }));
+    const blob = new Blob([csv], { type:'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `Trevis_${propName.replace(/\s+/g,'_')}_${ts}.csv`; a.click();
+  };
 
   const handleLogin = async (emailOrUser, password) => {
     if (!isConfigured) { setUser(emailOrUser); return { data: emailOrUser, error: null }; }
@@ -172,6 +217,10 @@ function AppInner() {
                     <span style={{ position:"absolute", right:16, background:T.red, color:"#fff", borderRadius:10,
                       padding:"1px 6px", fontSize:9, fontWeight:700, minWidth:16, textAlign:"center" }}>{overdueCount}</span>
                   )}
+                  {n.id==="arrears" && arrearsCount > 0 && (
+                    <span style={{ position:"absolute", right:16, background:T.red, color:"#fff", borderRadius:10,
+                      padding:"1px 6px", fontSize:9, fontWeight:700, minWidth:16, textAlign:"center" }}>{arrearsCount}</span>
+                  )}
                 </button>
               );
             })}
@@ -216,10 +265,25 @@ function AppInner() {
             onAddStudent={()=>{if(isAdmin){setAddStudentProp(selProp);setShowAddStudent(true);}}}
             onAddRoom={()=>{if(isAdmin&&activePropObj){setAddRoomPropId(activePropObj.id);setAddRoomPropName(activePropObj.name);setShowAddRoom(true);}}}
             onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}}
+            onExport={handlePropertyExport}
             isAdmin={isAdmin} />}
           {view === "students" && <Students props={visibleProps}
             onAddStudent={()=>{if(isAdmin){setAddStudentProp("");setShowAddStudent(true);}}} />}
-          {view === "reports" && <Reports props={visibleProps} dataFlags={dataFlags} isAdmin={isAdmin} />}
+          {view === "arrears" && <Arrears props={visibleProps}
+            onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}} />}
+          {view === "reports" && <Reports props={visibleProps} dataFlags={dataFlags} isAdmin={isAdmin}
+            onSaveSnapshot={async ()=>{
+              const d = new Date(); const month = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+              const {data,error}=await saveMonthlySnapshot(month);
+              if(error) showToast('Error: '+error.message,'error');
+              else showToast(`Snapshot saved for ${data} properties`);
+            }}
+            onGenerateObligations={async ()=>{
+              const d = new Date(); const month = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+              const {data,error}=await generateObligations(month);
+              if(error) showToast('Error: '+error.message,'error');
+              else showToast(`Generated obligations for ${data} students`);
+            }} />}
         </div>
       </div>
 
@@ -234,6 +298,155 @@ function AppInner() {
         onClose={()=>setProfileStudent(null)}
         onRecordPay={()=>{setPaymentProp(visibleProps.find(p=>p.name===profilePropName));setShowPayment(true);setProfileStudent(null);}}
         onRemove={handleRemoveStudent} isAdmin={isAdmin} />}
+
+      {/* Report download modal */}
+      {showReportModal && <ReportDownloadModal props={visibleProps} user={user}
+        onClose={()=>setShowReportModal(false)} />}
+
+      {/* Toast notification */}
+      {toast && (
+        <div style={{ position:'fixed', bottom:24, right:24, background:toast.type==='error'?T.redDim:T.greenDim,
+          border:`1px solid ${toast.type==='error'?T.red:T.green}`, borderRadius:10, padding:'12px 20px',
+          color:toast.type==='error'?T.red:T.green, fontSize:13, fontWeight:600, fontFamily:font, zIndex:1100,
+          animation:'fadeIn .3s ease', boxShadow:'0 4px 20px rgba(0,0,0,.3)' }}>
+          {toast.type==='error'?'✕':'✓'} {toast.msg}
+        </div>
+      )}
+
+      {/* Keyboard shortcut bar — desktop only */}
+      {showShortcuts && user && (
+        <div className="pn-shortcuts" style={{ position:'fixed', bottom:0, left:220, right:0, background:T.surface,
+          borderTop:`1px solid ${T.border}`, padding:'6px 20px', display:'flex', alignItems:'center', gap:16, zIndex:800 }}>
+          <span style={{ fontSize:10, color:T.muted }}>Shortcuts:</span>
+          {[['D','Dashboard'],['R','Reports'],['N','Add Student'],['P','Record Payment'],['Esc','Close']].map(([k,l])=>(
+            <span key={k} style={{ fontSize:10, color:T.subtle, display:'flex', alignItems:'center', gap:4 }}>
+              <kbd style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:3, padding:'1px 5px',
+                fontSize:9, fontFamily:"'IBM Plex Mono',monospace", color:T.gold }}>{k}</kbd> {l}
+            </span>
+          ))}
+          <button onClick={()=>setShowShortcuts(false)} style={{ marginLeft:'auto', background:'none', border:'none',
+            color:T.muted, cursor:'pointer', fontSize:12 }}>✕</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   REPORT DOWNLOAD MODAL — CSV or PDF print
+═══════════════════════════════════════════════════════════ */
+function ReportDownloadModal({ props, user, onClose }) {
+  const now = new Date();
+  const monthLabel = now.toLocaleString("en-US", { month:"long", year:"numeric" });
+  const grand = props.reduce((a,p) => ({
+    students:a.students+p.students, collected:a.collected+p.collected,
+    expected:a.expected+p.expected, rooms:a.rooms+p.rooms.length
+  }), { students:0, collected:0, expected:0, rooms:0 });
+
+  const handleCSV = () => {
+    const ts = now.toISOString().replace(/[:.]/g,'-').slice(0,19);
+    let csv = "Property,Rooms,Students,Expected,Collected,Arrears,Rate%\n";
+    props.forEach(p => {
+      const arr = p.expected-p.collected;
+      const rate = p.expected>0?((p.collected/p.expected)*100).toFixed(1):"0";
+      csv += `"${p.name}",${p.rooms.length},${p.students},${p.expected},${p.collected},${arr},${rate}\n`;
+    });
+    csv += `TOTAL,${grand.rooms},${grand.students},${grand.expected},${grand.collected},${grand.expected-grand.collected},${grand.expected>0?((grand.collected/grand.expected)*100).toFixed(1):"0"}\n\n`;
+    csv += "Student,Property,Room,Rent,Paid,Balance,Status\n";
+    props.forEach(p => p.rooms.forEach(r => r.students.filter(s=>s.status!=='VACANT'&&s.status!=='VACATED').forEach(s => {
+      csv += `"${s.name}","${p.name}","${r.no}",${r.rent},${s.paid},${r.rent-s.paid},${s.status}\n`;
+    })));
+    const blob = new Blob([csv], { type:'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `Trevis_Report_${ts}.csv`; a.click();
+    onClose();
+  };
+
+  const handlePDF = () => {
+    const outstanding = props.flatMap(p => p.rooms.flatMap(r =>
+      r.students.filter(s=>s.status!=='PAID'&&s.status!=='VACANT'&&s.status!=='VACATED')
+        .map(s => ({ name:s.name, property:p.name, room:r.no, balance:r.rent-s.paid }))
+    )).filter(s=>s.balance>0);
+
+    const printDiv = document.createElement('div');
+    printDiv.id = 'trevis-print-report';
+    printDiv.innerHTML = `
+      <style>
+        @media print {
+          body > *:not(#trevis-print-report) { display:none !important; }
+          #trevis-print-report { display:block !important; }
+        }
+        #trevis-print-report { font-family:Arial,sans-serif; color:#222; padding:32px; max-width:800px; margin:0 auto; }
+        #trevis-print-report h1 { font-size:22px; margin:0 0 4px; }
+        #trevis-print-report .subtitle { font-size:12px; color:#666; margin-bottom:24px; }
+        #trevis-print-report table { width:100%; border-collapse:collapse; margin:16px 0; font-size:12px; }
+        #trevis-print-report th { background:#f5f5f5; text-align:left; padding:8px 10px; border:1px solid #ddd; font-weight:600; }
+        #trevis-print-report td { padding:7px 10px; border:1px solid #ddd; }
+        #trevis-print-report tr:nth-child(even) td { background:#fafafa; }
+        #trevis-print-report .total-row td { font-weight:700; background:#f0f0f0 !important; }
+        #trevis-print-report .section { margin-top:24px; }
+        #trevis-print-report .footer { margin-top:32px; font-size:10px; color:#999; border-top:1px solid #ddd; padding-top:8px; }
+      </style>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div><h1>Trevis</h1><div class="subtitle">Monthly Report — ${monthLabel}</div></div>
+        <div style="text-align:right;font-size:11px;color:#666">Generated: ${now.toLocaleString()}</div>
+      </div>
+      <table>
+        <thead><tr><th>Property</th><th>Rooms</th><th>Students</th><th>Expected</th><th>Collected</th><th>Arrears</th><th>Rate</th></tr></thead>
+        <tbody>
+          ${props.map(p => {const arr=p.expected-p.collected;const rate=p.expected>0?((p.collected/p.expected)*100).toFixed(1):'0';
+            return `<tr><td>${p.name}</td><td>${p.rooms.length}</td><td>${p.students}</td><td>$${p.expected.toLocaleString()}</td><td>$${p.collected.toLocaleString()}</td><td>$${arr.toLocaleString()}</td><td>${rate}%</td></tr>`;
+          }).join('')}
+          <tr class="total-row"><td>TOTAL</td><td>${grand.rooms}</td><td>${grand.students}</td><td>$${grand.expected.toLocaleString()}</td><td>$${grand.collected.toLocaleString()}</td><td>$${(grand.expected-grand.collected).toLocaleString()}</td><td>${grand.expected>0?((grand.collected/grand.expected)*100).toFixed(1):'0'}%</td></tr>
+        </tbody>
+      </table>
+      ${outstanding.length > 0 ? `
+        <div class="section"><h3>Outstanding Balances (${outstanding.length} students)</h3>
+        <table><thead><tr><th>Student</th><th>Property</th><th>Room</th><th>Balance</th></tr></thead>
+        <tbody>${outstanding.map(s=>`<tr><td>${s.name}</td><td>${s.property}</td><td>${s.room}</td><td>$${s.balance.toLocaleString()}</td></tr>`).join('')}</tbody></table></div>
+      ` : '<div class="section"><p>✓ No outstanding balances</p></div>'}
+      <div class="footer">Generated by Trevis Property Manager</div>
+    `;
+    document.body.appendChild(printDiv);
+    window.print();
+    setTimeout(() => document.body.removeChild(printDiv), 1000);
+    onClose();
+  };
+
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.6)', display:'flex',
+      alignItems:'center', justifyContent:'center', zIndex:1000 }}>
+      <div onClick={e=>e.stopPropagation()} className="pn-modal-inner"
+        style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:16, padding:32, width:380, animation:'fadeIn .3s ease' }}>
+        <div style={{ fontSize:18, fontWeight:800, color:T.text, marginBottom:4 }}>Download Report</div>
+        <div style={{ fontSize:12, color:T.muted, marginBottom:24 }}>{monthLabel} — Portfolio Summary</div>
+        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          <button onClick={handleCSV} style={{ display:'flex', alignItems:'center', gap:12, background:T.surface,
+            border:`1px solid ${T.border}`, borderRadius:10, padding:'14px 16px', cursor:'pointer', fontFamily:font,
+            transition:'all .15s', textAlign:'left' }}
+            onMouseEnter={e=>e.currentTarget.style.background=T.hover}
+            onMouseLeave={e=>e.currentTarget.style.background=T.surface}>
+            <span style={{ fontSize:20 }}>📊</span>
+            <div>
+              <div style={{ fontSize:13, fontWeight:600, color:T.text }}>Download CSV</div>
+              <div style={{ fontSize:11, color:T.muted }}>Spreadsheet format — open in Excel</div>
+            </div>
+          </button>
+          <button onClick={handlePDF} style={{ display:'flex', alignItems:'center', gap:12, background:T.surface,
+            border:`1px solid ${T.border}`, borderRadius:10, padding:'14px 16px', cursor:'pointer', fontFamily:font,
+            transition:'all .15s', textAlign:'left' }}
+            onMouseEnter={e=>e.currentTarget.style.background=T.hover}
+            onMouseLeave={e=>e.currentTarget.style.background=T.surface}>
+            <span style={{ fontSize:20 }}>📄</span>
+            <div>
+              <div style={{ fontSize:13, fontWeight:600, color:T.text }}>Print PDF Summary</div>
+              <div style={{ fontSize:11, color:T.muted }}>Formatted report — save as PDF via print</div>
+            </div>
+          </button>
+        </div>
+        <button onClick={onClose} style={{ width:'100%', marginTop:16, background:'none', border:`1px solid ${T.border}`,
+          borderRadius:8, padding:'8px 0', color:T.muted, fontSize:12, cursor:'pointer', fontFamily:font }}>Cancel</button>
+      </div>
     </div>
   );
 }

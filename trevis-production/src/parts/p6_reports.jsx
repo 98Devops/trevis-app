@@ -4,7 +4,7 @@ import { T, font, fmt, Bar, Btn, Badge } from "./p2_helpers.jsx";
 /* ═══════════════════════════════════════════════════════════
    REPORTS VIEW
 ═══════════════════════════════════════════════════════════ */
-export function Reports({ props, dataFlags, isAdmin, onResolveFlag }) {
+export function Reports({ props, dataFlags, isAdmin, onResolveFlag, onSaveSnapshot, onGenerateObligations }) {
   const [tab, setTab] = useState("income");
   const totals = props.map(p => ({ name:p.name, students:p.students, collected:p.collected, expected:p.expected,
     arrears:p.expected-p.collected, rate:p.expected>0?((p.collected/p.expected)*100).toFixed(1):"0.0", overdue:p.overdue.length,
@@ -50,7 +50,7 @@ export function Reports({ props, dataFlags, isAdmin, onResolveFlag }) {
         <Btn accent={T.gold} style={{background:T.goldDim,color:T.gold,border:`1px solid ${T.gold}40`}} onClick={handleExport}>↓ Export CSV</Btn>
       </div>
 
-      <div style={{ display:"flex",gap:4,marginBottom:20,background:T.surface,borderRadius:10,padding:3,width:"fit-content",flexWrap:"wrap" }}>
+      <div className="pn-report-tabs" style={{ display:"flex",gap:4,marginBottom:20,background:T.surface,borderRadius:10,padding:3,width:"fit-content",flexWrap:"wrap" }}>
         {tabs.map(([k,l])=>(
           <button key={k} onClick={()=>setTab(k)} style={{ background:tab===k?T.gold:"none",border:"none",borderRadius:7,
             padding:"8px 18px",color:tab===k?"#0D0F14":T.muted,fontSize:12,fontWeight:tab===k?700:400,cursor:"pointer",fontFamily:font }}>{l}
@@ -58,6 +58,14 @@ export function Reports({ props, dataFlags, isAdmin, onResolveFlag }) {
           </button>
         ))}
       </div>
+
+      {/* Admin actions */}
+      {isAdmin && (
+        <div style={{ display:"flex",gap:10,marginBottom:16,flexWrap:"wrap" }}>
+          {onSaveSnapshot && <Btn accent={T.blue} onClick={onSaveSnapshot} style={{fontSize:11,padding:"7px 14px"}}>📸 Save Monthly Snapshot</Btn>}
+          {onGenerateObligations && <Btn accent={T.amber} onClick={onGenerateObligations} style={{fontSize:11,padding:"7px 14px"}}>⚙ Generate Obligations</Btn>}
+        </div>
+      )}
 
       {tab === "income" && (
         <div style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:16,overflow:"hidden" }}>

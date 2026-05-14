@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { T, font, Badge, InputField, SelectField, Btn, fmt } from "./p2_helpers.jsx";
+import { supabase, isConfigured as sbConfigured } from "../lib/supabase";
 
 /* ═══════════════════════════════════════════════════════════
    LOGIN SCREEN
@@ -15,7 +16,6 @@ export function LoginScreen({ onLogin, isConfigured }) {
     setLoading(true);
     setErr("");
     if (!isConfigured) {
-      // Demo mode fallback
       const demoUsers = [
         { email:"admin@trevis.co.zw", password:"admin1234", role:"ADMIN", full_name:"Admin" },
         { email:"manager@trevis.co.zw", password:"manager1234", role:"MANAGER", full_name:"Manager" },
@@ -31,6 +31,17 @@ export function LoginScreen({ onLogin, isConfigured }) {
     setLoading(false);
   };
 
+  const handleGoogleLogin = async () => {
+    if (!sbConfigured || !supabase) return;
+    setLoading(true);
+    setErr("");
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin }
+    });
+    if (error) { setErr(error.message); setLoading(false); }
+  };
+
   return (
     <div style={{ minHeight:"100vh", background:T.bg, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:font }}>
       <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:20, padding:40, width:400, animation:"fadeIn .4s ease" }}>
@@ -43,6 +54,26 @@ export function LoginScreen({ onLogin, isConfigured }) {
             ⚠ Demo Mode — Connect Supabase for production
           </div>
         )}
+        {/* Google OAuth */}
+        {isConfigured && (
+          <>
+            <button onClick={handleGoogleLogin} disabled={loading}
+              style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:10,
+                background:T.surface, border:`1px solid ${T.border}`, borderRadius:10, padding:"12px 16px",
+                color:T.text, fontSize:13, fontWeight:600, cursor:loading?"wait":"pointer", fontFamily:font,
+                transition:"all .15s" }}
+              onMouseEnter={e=>e.currentTarget.style.background=T.hover}
+              onMouseLeave={e=>e.currentTarget.style.background=T.surface}>
+              <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+              Continue with Google
+            </button>
+            <div style={{ display:"flex", alignItems:"center", gap:12, margin:"16px 0" }}>
+              <div style={{ flex:1, height:1, background:T.border }} />
+              <span style={{ fontSize:11, color:T.muted }}>or</span>
+              <div style={{ flex:1, height:1, background:T.border }} />
+            </div>
+          </>
+        )}
         <form onSubmit={handleSubmit} style={{ display:"flex", flexDirection:"column", gap:14 }}>
           <InputField label="Email" value={email} onChange={v=>{setEmail(v);setErr("");}} type="email" placeholder="admin@trevis.co.zw" />
           <InputField label="Password" value={pass} onChange={v=>{setPass(v);setErr("");}} type="password" placeholder="••••••••" />
@@ -52,7 +83,7 @@ export function LoginScreen({ onLogin, isConfigured }) {
           </Btn>
         </form>
         <div style={{ fontSize:10, color:T.muted, textAlign:"center", marginTop:20, lineHeight:1.6 }}>
-          {isConfigured ? "Use your Trevis credentials" : "Demo: admin@trevis.co.zw / admin1234"}
+          {isConfigured ? "Staff access only — use your Trevis credentials" : "Demo: admin@trevis.co.zw / admin1234"}
         </div>
       </div>
     </div>
@@ -303,58 +334,147 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
   const balance = room.rent - student.paid;
   const [confirmRemove, setConfirmRemove] = useState(false);
 
+  const handleWhatsApp = () => {
+    if (!student.phone) return;
+    const phone = student.phone.replace(/[^0-9]/g,'');
+    const fullPhone = phone.startsWith('263') ? phone : phone.startsWith('0') ? '263'+phone.slice(1) : '263'+phone;
+    window.open(`https://wa.me/${fullPhone}`, '_blank');
+  };
+
+  const handlePrintStatement = () => {
+    const now = new Date();
+    const monthLabel = now.toLocaleString("en-US", { month:"long", year:"numeric" });
+    const printDiv = document.createElement('div');
+    printDiv.id = 'trevis-statement';
+    printDiv.innerHTML = `
+      <style>
+        @media print { body > *:not(#trevis-statement) { display:none !important; } #trevis-statement { display:block !important; } }
+        #trevis-statement { font-family:Arial,sans-serif; color:#222; padding:32px; max-width:600px; margin:0 auto; }
+        #trevis-statement table { width:100%; border-collapse:collapse; margin:12px 0; font-size:12px; }
+        #trevis-statement th,#trevis-statement td { padding:6px 10px; border:1px solid #ddd; text-align:left; }
+        #trevis-statement th { background:#f5f5f5; font-weight:600; }
+        #trevis-statement .footer { margin-top:24px; font-size:10px; color:#999; border-top:1px solid #ddd; padding-top:8px; }
+      </style>
+      <h2 style="margin:0 0 4px">Trevis Property Management</h2>
+      <div style="font-size:12px;color:#666;margin-bottom:20px">Tenant Statement — ${monthLabel}</div>
+      <table><tbody>
+        <tr><th>Tenant</th><td>${student.name}</td></tr>
+        <tr><th>Property</th><td>${propName}</td></tr>
+        <tr><th>Room</th><td>${room.no}</td></tr>
+        <tr><th>Monthly Rent</th><td>$${room.rent}</td></tr>
+        <tr><th>Amount Paid</th><td>$${student.paid}</td></tr>
+        <tr><th>Balance</th><td style="font-weight:700;color:${balance>0?'#c00':'#090'}">$${balance}</td></tr>
+        <tr><th>Status</th><td>${student.status}</td></tr>
+        ${student.date ? `<tr><th>Check-in</th><td>${student.date}</td></tr>` : ''}
+      </tbody></table>
+      ${student.payHistory && student.payHistory.length > 0 ? `
+        <h3 style="margin:20px 0 8px;font-size:14px">Payment History</h3>
+        <table><thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Receipt</th></tr></thead>
+        <tbody>${student.payHistory.map(p=>`<tr><td>${p.date}</td><td>$${p.amount}</td><td>${p.method}</td><td>${p.receipt||'—'}</td></tr>`).join('')}</tbody></table>
+      ` : ''}
+      <div class="footer">Generated ${now.toLocaleString()} — Trevis Property Manager</div>
+    `;
+    document.body.appendChild(printDiv);
+    window.print();
+    setTimeout(() => document.body.removeChild(printDiv), 1000);
+  };
+
   return (
-    <div className="pn-profile-panel" style={{ position:"fixed",top:0,right:0,bottom:0,width:420,background:T.card,borderLeft:`1px solid ${T.border}`,
-      zIndex:998,padding:28,overflowY:"auto",animation:"slideIn .3s ease",boxShadow:"-4px 0 20px #00000060" }}>
-      <button onClick={onClose} style={{ position:"absolute",top:16,right:16,background:"none",border:"none",cursor:"pointer",color:T.muted,fontSize:18 }}>✕</button>
-      <div style={{ marginBottom:24 }}>
-        <div style={{ fontSize:11,color:ac.accent,textTransform:"uppercase",letterSpacing:"0.12em" }}>{propName} · {room.no}</div>
-        <h2 style={{ fontSize:20,fontWeight:800,color:T.text,margin:"6px 0" }}>{student.name}</h2>
-        <Badge status={student.status} />
-      </div>
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:24 }}>
-        <div style={{ background:T.bg,borderRadius:10,padding:14 }}>
-          <div style={{ fontSize:10,color:T.muted,textTransform:"uppercase" }}>Rent</div>
-          <div style={{ fontSize:18,fontWeight:700,color:T.text,fontFamily:"'IBM Plex Mono',monospace" }}>{fmt(room.rent)}</div>
+    <>
+      <div onClick={onClose} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:997 }} />
+      <div className="pn-profile-panel" style={{ position:"fixed",top:0,right:0,bottom:0,width:420,background:T.card,borderLeft:`1px solid ${T.border}`,
+        zIndex:998,padding:28,overflowY:"auto",animation:"slideIn .3s ease",boxShadow:"-4px 0 20px #00000060" }}>
+        <button onClick={onClose} style={{ position:"absolute",top:16,right:16,background:"none",border:"none",cursor:"pointer",color:T.muted,fontSize:18 }}>✕</button>
+        <div style={{ marginBottom:24 }}>
+          <div style={{ fontSize:11,color:ac.accent,textTransform:"uppercase",letterSpacing:"0.12em" }}>{propName} · {room.no}</div>
+          <h2 style={{ fontSize:20,fontWeight:800,color:T.text,margin:"6px 0" }}>{student.name}</h2>
+          <Badge status={student.status} />
         </div>
-        <div style={{ background:T.bg,borderRadius:10,padding:14 }}>
-          <div style={{ fontSize:10,color:T.muted,textTransform:"uppercase" }}>Balance</div>
-          <div style={{ fontSize:18,fontWeight:700,color:balance>0?T.red:T.green,fontFamily:"'IBM Plex Mono',monospace" }}>{fmt(balance)}</div>
+
+        {/* Info grid */}
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20 }}>
+          <div style={{ background:T.bg,borderRadius:10,padding:14 }}>
+            <div style={{ fontSize:10,color:T.muted,textTransform:"uppercase" }}>Rent</div>
+            <div style={{ fontSize:18,fontWeight:700,color:T.text,fontFamily:"'IBM Plex Mono',monospace" }}>{fmt(room.rent)}</div>
+          </div>
+          <div style={{ background:T.bg,borderRadius:10,padding:14 }}>
+            <div style={{ fontSize:10,color:T.muted,textTransform:"uppercase" }}>Balance</div>
+            <div style={{ fontSize:18,fontWeight:700,color:balance>0?T.red:T.green,fontFamily:"'IBM Plex Mono',monospace" }}>{fmt(balance)}</div>
+          </div>
         </div>
-      </div>
-      {student.notes && <div style={{ background:T.amberDim,border:`1px solid ${T.amber}30`,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.amber,marginBottom:16 }}>📝 {student.notes}</div>}
-      <div style={{ marginBottom:16 }}>
-        <div style={{ fontSize:13,fontWeight:700,color:T.text,marginBottom:12 }}>Payment History</div>
-        {(!student.payHistory || student.payHistory.length === 0) ? (
-          <div style={{ color:T.muted,fontSize:12,fontStyle:"italic" }}>No payment history recorded yet</div>
-        ) : student.payHistory.map((p,i) => (
-          <div key={i} style={{ borderLeft:`2px solid ${ac.accent}`,paddingLeft:12,marginBottom:12 }}>
-            <div style={{ display:"flex",justifyContent:"space-between" }}>
-              <span style={{ fontSize:13,fontWeight:700,color:T.green }}>{fmt(p.amount)}</span>
-              <span style={{ fontSize:11,color:T.muted }}>{p.date}</span>
+
+        {/* Contact & details */}
+        <div style={{ display:"flex",flexDirection:"column",gap:6,marginBottom:20 }}>
+          {student.phone && (
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12 }}>
+              <span style={{ color:T.muted }}>Phone</span>
+              <span style={{ color:T.text }}>{student.phone}</span>
             </div>
-            <div style={{ fontSize:11,color:T.subtle }}>{p.method}{p.receipt ? ` · #${p.receipt}` : ""}</div>
-            {p.notes && <div style={{ fontSize:11,color:T.muted,fontStyle:"italic" }}>{p.notes}</div>}
-            <div style={{ fontSize:10,color:T.muted }}>by {p.recordedBy}</div>
-          </div>
-        ))}
-      </div>
-      <Btn accent={ac.accent} onClick={onRecordPay} style={{ width:"100%", marginBottom:12 }}>+ Record Payment</Btn>
-      {isAdmin && !confirmRemove && (
-        <Btn accent={T.red} onClick={()=>setConfirmRemove(true)} style={{ width:"100%",background:T.redDim,color:T.red,border:`1px solid ${T.red}40` }}>
-          Remove Student
-        </Btn>
-      )}
-      {isAdmin && confirmRemove && (
-        <div style={{ background:T.redDim,border:`1px solid ${T.red}40`,borderRadius:10,padding:16,textAlign:"center" }}>
-          <div style={{ fontSize:13,color:T.red,fontWeight:600,marginBottom:12 }}>Remove {student.name} from {room.no}?</div>
-          <div style={{ fontSize:11,color:T.muted,marginBottom:12 }}>This will not delete their payment history.</div>
-          <div style={{ display:"flex",gap:8,justifyContent:"center" }}>
-            <Btn accent={T.border} style={{color:T.text}} onClick={()=>setConfirmRemove(false)}>Cancel</Btn>
-            <Btn accent={T.red} onClick={()=>{onRemove(student.id);onClose();}}>Confirm Remove</Btn>
-          </div>
+          )}
+          {student.date && (
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12 }}>
+              <span style={{ color:T.muted }}>Check-in</span>
+              <span style={{ color:T.text }}>{student.date}</span>
+            </div>
+          )}
+          {student.idNumber && (
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12 }}>
+              <span style={{ color:T.muted }}>ID</span>
+              <span style={{ color:T.text }}>{student.idNumber}</span>
+            </div>
+          )}
         </div>
-      )}
-    </div>
+
+        {student.notes && <div style={{ background:T.amberDim,border:`1px solid ${T.amber}30`,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.amber,marginBottom:16 }}>📝 {student.notes}</div>}
+
+        {/* Payment timeline */}
+        <div style={{ marginBottom:20 }}>
+          <div style={{ fontSize:13,fontWeight:700,color:T.text,marginBottom:12 }}>Payment History</div>
+          {(!student.payHistory || student.payHistory.length === 0) ? (
+            <div style={{ color:T.muted,fontSize:12,fontStyle:"italic" }}>No payments recorded</div>
+          ) : student.payHistory.map((p,i) => (
+            <div key={i} style={{ borderLeft:`2px solid ${ac.accent}`,paddingLeft:12,marginBottom:12 }}>
+              <div style={{ display:"flex",justifyContent:"space-between" }}>
+                <span style={{ fontSize:13,fontWeight:700,color:T.green }}>{fmt(p.amount)}</span>
+                <span style={{ fontSize:11,color:T.muted }}>{p.date}</span>
+              </div>
+              <div style={{ fontSize:11,color:T.subtle }}>{p.method}{p.receipt ? ` · #${p.receipt}` : ""}</div>
+              {p.notes && <div style={{ fontSize:11,color:T.muted,fontStyle:"italic" }}>{p.notes}</div>}
+              <div style={{ fontSize:10,color:T.muted }}>by {p.recordedBy}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Action buttons — all staff actions */}
+        <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+          <Btn accent={ac.accent} onClick={onRecordPay} style={{ width:"100%" }}>+ Record Payment</Btn>
+          <div style={{ display:"flex",gap:8 }}>
+            {student.phone && (
+              <Btn accent={T.green} onClick={handleWhatsApp} style={{ flex:1,fontSize:12 }}>
+                💬 WhatsApp
+              </Btn>
+            )}
+            <Btn accent={T.blue} onClick={handlePrintStatement} style={{ flex:1,fontSize:12,color:"#fff" }}>
+              🖨 Print Statement
+            </Btn>
+          </div>
+          {isAdmin && !confirmRemove && (
+            <Btn accent={T.red} onClick={()=>setConfirmRemove(true)} style={{ width:"100%",background:T.redDim,color:T.red,border:`1px solid ${T.red}40` }}>
+              Remove Student
+            </Btn>
+          )}
+          {isAdmin && confirmRemove && (
+            <div style={{ background:T.redDim,border:`1px solid ${T.red}40`,borderRadius:10,padding:16,textAlign:"center" }}>
+              <div style={{ fontSize:13,color:T.red,fontWeight:600,marginBottom:12 }}>Remove {student.name} from {room.no}?</div>
+              <div style={{ fontSize:11,color:T.muted,marginBottom:12 }}>Payment history is preserved.</div>
+              <div style={{ display:"flex",gap:8,justifyContent:"center" }}>
+                <Btn accent={T.border} style={{color:T.text}} onClick={()=>setConfirmRemove(false)}>Cancel</Btn>
+                <Btn accent={T.red} onClick={()=>{onRemove(student.id);onClose();}}>Confirm Remove</Btn>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
   );
 }

@@ -75,6 +75,7 @@ select option { background:#131720; }
   .pn-report-tabs button { flex-shrink:0 !important; white-space:nowrap !important; }
   .pn-report-table { display:none !important; }
   .pn-report-cards { display:flex !important; }
+  .pn-shortcuts { display:none !important; }
 }
 @media (max-width:480px) {
   .pn-kpi-grid { grid-template-columns:1fr !important; }
