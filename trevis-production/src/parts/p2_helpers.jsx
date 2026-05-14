@@ -61,6 +61,8 @@ select option { background:#131720; }
   .pn-attn-table { display:none !important; }
   .pn-attn-cards { display:flex !important; }
   .pn-table-scroll { overflow-x:auto !important; -webkit-overflow-scrolling:touch !important; }
+  .pn-chart-desktop { display:none !important; }
+  .pn-chart-mobile { display:flex !important; }
   .pn-chart-labels { font-size:8px !important; }
   .pn-modal-inner { width:95vw !important; max-width:95vw !important; max-height:90vh !important; margin:5vh auto !important; }
   .pn-profile-panel { width:100vw !important; }
@@ -68,6 +70,11 @@ select option { background:#131720; }
   .pn-header-actions { width:100% !important; flex-wrap:wrap !important; }
   .pn-quick-actions { flex-wrap:wrap !important; }
   .pn-quick-actions button { flex:1 !important; min-width:100px !important; }
+  .pn-report-tabs { overflow-x:auto !important; -webkit-overflow-scrolling:touch !important; flex-wrap:nowrap !important; scrollbar-width:none !important; }
+  .pn-report-tabs::-webkit-scrollbar { display:none !important; }
+  .pn-report-tabs button { flex-shrink:0 !important; white-space:nowrap !important; }
+  .pn-report-table { display:none !important; }
+  .pn-report-cards { display:flex !important; }
 }
 @media (max-width:480px) {
   .pn-kpi-grid { grid-template-columns:1fr !important; }

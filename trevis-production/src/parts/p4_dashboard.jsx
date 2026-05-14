@@ -60,33 +60,71 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
         <Btn accent={T.blue} onClick={onExport} style={{color:"#fff"}}>↓ Download Report</Btn>
       </div>
 
-      {/* Collection bar chart */}
+      {/* Collection bar chart — grouped bars */}
       <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:16, padding:24, marginBottom:20 }}>
         <div style={{ fontSize:14, fontWeight:700, color:T.text, marginBottom:20 }}>Collected vs Expected by Property</div>
-        <div style={{ display:"flex", gap:24, alignItems:"flex-end", height:160 }}>
+        {/* Desktop: vertical grouped bars */}
+        <div className="pn-chart-desktop" style={{ display:"flex", gap:32, alignItems:"flex-end", height:220, padding:"0 8px" }}>
           {props.map(p => {
             const ac = T.prop[p.name] || { accent: T.gold };
-            const maxVal = Math.max(...props.map(x=>x.expected), 1);
-            const ePct = (p.expected/maxVal)*100;
-            const cPct = (p.collected/maxVal)*100;
+            const maxVal = Math.max(...props.map(x=>Math.max(x.expected,x.collected)), 1);
+            const ePct = Math.max(2, (p.expected/maxVal)*100);
+            const cPct = Math.max(2, (p.collected/maxVal)*100);
+            const is100 = p.expected > 0 && p.collected >= p.expected;
             return (
-              <div key={p.name} style={{ flex:1, textAlign:"center" }}>
-                <div style={{ display:"flex", gap:4, justifyContent:"center", alignItems:"flex-end", height:120 }}>
-                  <div style={{ width:20, height:`${ePct}%`, background:T.border, borderRadius:"4px 4px 0 0", position:"relative" }}>
-                    <div className="pn-chart-labels" style={{ position:"absolute",top:-18,width:60,left:"50%",marginLeft:-30,textAlign:"center",fontSize:9,color:T.muted }}>{fmt(p.expected)}</div>
-                  </div>
-                  <div style={{ width:20, height:`${cPct}%`, background:ac.accent, borderRadius:"4px 4px 0 0", position:"relative" }}>
-                    <div className="pn-chart-labels" style={{ position:"absolute",top:-18,width:60,left:"50%",marginLeft:-30,textAlign:"center",fontSize:9,color:ac.accent }}>{fmt(p.collected)}</div>
-                  </div>
+              <div key={p.name} style={{ flex:1, textAlign:"center", minWidth:0 }}>
+                <div style={{ display:"flex", gap:3, justifyContent:"center", alignItems:"flex-end", height:180 }}>
+                  {is100 ? (
+                    <div style={{ width:28, height:`${cPct}%`, background:ac.accent, borderRadius:"4px 4px 0 0", position:"relative" }}>
+                      <div style={{ position:"absolute",bottom:"100%",left:"50%",transform:"translateX(-50%)",whiteSpace:"nowrap",fontSize:10,fontWeight:700,color:ac.accent,paddingBottom:6 }}>
+                        ✓ {fmt(p.collected)}
+                      </div>
+                    </div>
+                  ) : (<>
+                    <div style={{ width:18, height:`${ePct}%`, background:`${ac.accent}40`, borderRadius:"4px 4px 0 0", position:"relative" }}>
+                      <div style={{ position:"absolute",bottom:"100%",left:"50%",transform:"translateX(-50%)",whiteSpace:"nowrap",fontSize:9,color:T.muted,paddingBottom:6 }}>
+                        {fmt(p.expected)}
+                      </div>
+                    </div>
+                    <div style={{ width:18, height:`${cPct}%`, background:ac.accent, borderRadius:"4px 4px 0 0", position:"relative" }}>
+                      <div style={{ position:"absolute",bottom:"100%",left:"50%",transform:"translateX(-50%)",whiteSpace:"nowrap",fontSize:9,fontWeight:600,color:ac.accent,paddingBottom:6 }}>
+                        {fmt(p.collected)}
+                      </div>
+                    </div>
+                  </>)}
                 </div>
-                <div style={{ fontSize:10, color:T.muted, marginTop:8, whiteSpace:"nowrap" }}>{p.name}</div>
+                <div style={{ fontSize:10, color:T.muted, marginTop:10, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{p.name}</div>
               </div>
             );
           })}
         </div>
-        <div style={{ display:"flex",gap:20,justifyContent:"center",marginTop:12 }}>
-          <span style={{ fontSize:10,color:T.muted }}>▪ Expected</span>
-          <span style={{ fontSize:10,color:T.green }}>▪ Collected</span>
+        {/* Mobile: horizontal bars */}
+        <div className="pn-chart-mobile" style={{ display:"none", flexDirection:"column", gap:16 }}>
+          {props.map(p => {
+            const ac = T.prop[p.name] || { accent: T.gold };
+            const maxVal = Math.max(...props.map(x=>Math.max(x.expected,x.collected)), 1);
+            const ePct = Math.max(3, (p.expected/maxVal)*100);
+            const cPct = Math.max(3, (p.collected/maxVal)*100);
+            return (
+              <div key={p.name+"m"}>
+                <div style={{ fontSize:11, color:T.text, fontWeight:600, marginBottom:6 }}>{p.name}</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <div style={{ height:12, width:`${ePct}%`, background:`${ac.accent}40`, borderRadius:3, minWidth:20 }} />
+                    <span style={{ fontSize:10, color:T.muted, whiteSpace:"nowrap" }}>{fmt(p.expected)}</span>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <div style={{ height:12, width:`${cPct}%`, background:ac.accent, borderRadius:3, minWidth:20 }} />
+                    <span style={{ fontSize:10, color:ac.accent, fontWeight:600, whiteSpace:"nowrap" }}>{fmt(p.collected)}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ display:"flex",gap:20,justifyContent:"center",marginTop:16 }}>
+          <span style={{ display:"flex",alignItems:"center",gap:5,fontSize:10,color:T.muted }}><span style={{width:8,height:8,borderRadius:2,background:T.border,display:"inline-block"}} /> Expected</span>
+          <span style={{ display:"flex",alignItems:"center",gap:5,fontSize:10,color:T.green }}><span style={{width:8,height:8,borderRadius:2,background:T.green,display:"inline-block"}} /> Collected</span>
         </div>
       </div>
 
