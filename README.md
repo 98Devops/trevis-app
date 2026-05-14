@@ -100,3 +100,5 @@ Ensure you have [Node.js](https://nodejs.org/) installed on your machine.
 * **[Vite](https://vitejs.dev/)** - Next Generation Frontend Tooling
 * **Vanilla CSS** - Zero-dependency responsive design and animations
 * **No Backend (MVP)** - Utilizes pure JavaScript in-memory state manipulation
+
+* built by Tafara Rugara
