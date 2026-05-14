@@ -14,6 +14,7 @@ export const useAuth = () => useContext(AuthContext);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState("");
 
   useEffect(() => {
     if (!isConfigured) { setLoading(false); return; }
@@ -23,6 +24,24 @@ export function AuthProvider({ children }) {
     const loadProfile = async () => {
       try {
         console.log('[Trevis] Loading user profile...');
+        
+        const ALLOWED_EMAILS = [
+          "tfrsuperfx@gmail.com",
+          "tafiejr6@gmail.com"
+        ];
+        
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session) {
+          const email = session.user.email;
+          if (!ALLOWED_EMAILS.includes(email)) {
+            await supabase.auth.signOut();
+            setAuthError("Access denied. This system is restricted to authorised staff only.");
+            if (!cancelled) { setUser(null); setLoading(false); }
+            return;
+          }
+        }
+        
         const { data } = await getCurrentUser();
         console.log('[Trevis] Profile:', data ? `${data.email} (${data.role})` : 'none');
         if (!cancelled) { setUser(data); setLoading(false); }
@@ -78,10 +97,11 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     try { await signOut(); } catch (_) {}
     setUser(null);
+    setAuthError("");
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, login, logout, loading, isConfigured }}>
+    <AuthContext.Provider value={{ user, setUser, login, logout, loading, isConfigured, authError, setAuthError }}>
       {children}
     </AuthContext.Provider>
   );

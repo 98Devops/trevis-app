@@ -1,15 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { T, font, Badge, InputField, SelectField, Btn, fmt } from "./p2_helpers.jsx";
 import { supabase, isConfigured as sbConfigured } from "../lib/supabase";
+import { useAuth } from "./p1_imports_context.jsx";
 
 /* ═══════════════════════════════════════════════════════════
    LOGIN SCREEN
 ═══════════════════════════════════════════════════════════ */
 export function LoginScreen({ onLogin, isConfigured }) {
+  const { authError } = useAuth() || {};
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
-  const [err, setErr] = useState("");
+  const [err, setErr] = useState(authError || "");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (authError) setErr(authError);
+  }, [authError]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -69,7 +75,7 @@ export function LoginScreen({ onLogin, isConfigured }) {
             </button>
             <div style={{ display:"flex", alignItems:"center", gap:12, margin:"16px 0" }}>
               <div style={{ flex:1, height:1, background:T.border }} />
-              <span style={{ fontSize:11, color:T.muted }}>or</span>
+              <span style={{ fontSize:11, color:T.muted }}>or sign in with email</span>
               <div style={{ flex:1, height:1, background:T.border }} />
             </div>
           </>
