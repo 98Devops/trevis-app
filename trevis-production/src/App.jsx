@@ -6,7 +6,8 @@ import { Dashboard } from "./parts/p4_dashboard.jsx";
 import { PropertyDetail, Students } from "./parts/p5_views.jsx";
 import { Reports } from "./parts/p6_reports.jsx";
 import { Finances } from "./parts/p7_arrears.jsx";
-// import { Calendar } from "./parts/p8_calendar.jsx"; // TODO: Re-enable after file system issue resolved
+import { Calendar } from "./parts/p8_calendar.jsx";
+import { SettingsPanel } from "./parts/p9_settings.jsx";
 
 /* ═══════════════════════════════════════════════════════════
    NAVIGATION
@@ -14,8 +15,8 @@ import { Finances } from "./parts/p7_arrears.jsx";
 const NAV = [
   { id:"dashboard", label:"Dashboard", icon:"⬡" },
   { id:"students",  label:"Students",  icon:"◎" },
+  { id:"calendar",  label:"Calendar",  icon:"📅" },
   { id:"finances",  label:"Finances",  icon:"◈" },
-  // { id:"calendar",  label:"Calendar",  icon:"📅" }, // TODO: Re-enable after file system issue resolved
   { id:"reports",   label:"Reports",   icon:"▦" },
 ];
 
@@ -61,6 +62,7 @@ function AppInner() {
   const [showShortcuts, setShowShortcuts] = useState(true);
   const [toast, setToast] = useState(null);
   const [financesFilter, setFinancesFilter] = useState("ALL");
+  const [showSettings, setShowSettings] = useState(false);
 
   // Build UI props from raw Supabase data or use demo
   const props = useMemo(() => {
@@ -204,7 +206,7 @@ function AppInner() {
         </button>
         <div style={{ fontSize:16, fontWeight:800, color:T.gold }}>Trevis</div>
         <div style={{ width:28, height:28, borderRadius:"50%", background:T.goldDim, display:"flex", alignItems:"center",
-          justifyContent:"center", fontSize:11, fontWeight:700, color:T.gold }}>{(user.email||"U")[0].toUpperCase()}</div>
+          justifyContent:"center", fontSize:11, fontWeight:700, color:T.gold, flexShrink:0 }}>{(user.email||"U")[0].toUpperCase()}</div>
       </div>
 
       <div className={`pn-sidebar-overlay ${sidebarOpen?"pn-sidebar-open":""}`} onClick={()=>setSidebarOpen(false)} style={{ display:"none" }} />
@@ -258,11 +260,21 @@ function AppInner() {
           <div style={{ padding:"16px 22px", borderTop:`1px solid ${T.border}` }}>
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
               <div style={{ width:28, height:28, borderRadius:"50%", background:T.goldDim, display:"flex", alignItems:"center",
-                justifyContent:"center", fontSize:12, fontWeight:700, color:T.gold }}>{(user.email||"U")[0].toUpperCase()}</div>
+                justifyContent:"center", fontSize:12, fontWeight:700, color:T.gold, flexShrink:0 }}>{(user.email||"U")[0].toUpperCase()}</div>
               <div className="pn-label">
                 <div style={{ fontSize:11, color:T.text, fontWeight:600 }}>{isAdmin ? "Admin" : "Manager"}</div>
                 <div style={{ fontSize:10, color:T.muted }}>{user.email}</div>
               </div>
+              {isAdmin && (
+                <button onClick={() => setShowSettings(true)} style={{ 
+                  background: "none", 
+                  border: "none", 
+                  color: T.muted, 
+                  cursor: "pointer", 
+                  fontSize: 16,
+                  padding: 4
+                }} title="Settings">⚙️</button>
+              )}
             </div>
             <button onClick={()=>{ logout ? logout() : setUser(null); }} className="pn-label"
               style={{ width:"100%", background:"none", border:`1px solid ${T.border}`, borderRadius:6, padding:"6px 0",
@@ -289,11 +301,11 @@ function AppInner() {
           {view === "students" && <Students props={visibleProps}
             onAddStudent={()=>{if(isAdmin){setAddStudentProp("");setShowAddStudent(true);}}}
             onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}} />}
+          {view === "calendar" && <Calendar props={visibleProps}
+            onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}} />}
           {view === "finances" && <Finances props={visibleProps}
             onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}}
             initialPropFilter={financesFilter} />}
-          {/* {view === "calendar" && <Calendar props={visibleProps}
-            onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}} />} */}
           {view === "reports" && <Reports props={visibleProps} dataFlags={dataFlags} isAdmin={isAdmin}
             onSaveSnapshot={async ()=>{
               const d = new Date(); const month = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
@@ -325,6 +337,15 @@ function AppInner() {
       {/* Report download modal */}
       {showReportModal && <ReportDownloadModal props={visibleProps} user={user}
         onClose={()=>setShowReportModal(false)} />}
+
+      {/* Settings Panel */}
+      {showSettings && (
+        <SettingsPanel 
+          onClose={() => setShowSettings(false)} 
+          isAdmin={isAdmin} 
+          user={user} 
+        />
+      )}
 
       {/* Toast notification */}
       {toast && (

@@ -42,6 +42,11 @@ select option { background:#131720; }
   from { transform:translateY(100%); opacity:0; }
   to { transform:translateY(0); opacity:1; }
 }
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
 @keyframes fadeIn {
   from { opacity:0; transform:translateY(8px); }
   to { opacity:1; transform:translateY(0); }
@@ -148,6 +153,8 @@ select option { background:#131720; }
   .pn-calendar-desktop { display:none !important; }
   .pn-calendar-mobile { display:flex !important; }
   .pn-day-panel-inner { width:90% !important; max-width:400px !important; padding:20px !important; }
+  .pn-upcoming-desktop { display:none !important; }
+  .pn-upcoming-mobile { display:flex !important; }
 }
 
 /* ── MOBILE: 480px ── */
@@ -340,4 +347,55 @@ export function formatDateLong(date) {
   return new Date(date).toLocaleDateString('en-GB', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   });
+}
+
+export function daysUntilAnniversary(checkInDate) {
+  if (!checkInDate) return null;
+  const checkin = new Date(checkInDate);
+  const thisYear = new Date();
+  const anniversary = new Date(thisYear.getFullYear(), checkin.getMonth(), checkin.getDate());
+  if (anniversary < thisYear) anniversary.setFullYear(thisYear.getFullYear() + 1);
+  const diff = Math.floor((anniversary - thisYear) / (1000 * 60 * 60 * 24));
+  return diff <= 7 ? diff : null;
+}
+
+export function DateRangeFilter({ onChange, value }) {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+  const startOfYear = new Date(now.getFullYear(), 0, 1);
+  const endOfYear = new Date(now.getFullYear(), 11, 31);
+
+  const presets = [
+    { label: 'This Month', getValue: () => [startOfMonth, endOfMonth] },
+    { label: 'Last Month', getValue: () => [startOfLastMonth, endOfLastMonth] },
+    { label: 'Last 3 Months', getValue: () => [new Date(now.getFullYear(), now.getMonth() - 2, 1), endOfMonth] },
+    { label: 'Last 6 Months', getValue: () => [new Date(now.getFullYear(), now.getMonth() - 5, 1), endOfMonth] },
+    { label: 'This Year', getValue: () => [startOfYear, endOfYear] },
+  ];
+
+  return (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+      {presets.map(preset => (
+        <button key={preset.label} 
+          onClick={() => onChange && onChange(preset.getValue())}
+          style={{ 
+            background: value === preset.label ? T.goldDim : T.card, 
+            border: `1px solid ${value === preset.label ? T.gold : T.border}`, 
+            borderRadius: 20, 
+            padding: "6px 12px", 
+            color: value === preset.label ? T.gold : T.text, 
+            fontSize: 11, 
+            fontWeight: 600, 
+            cursor: "pointer", 
+            fontFamily: font,
+            transition: "all .15s"
+          }}>
+          {preset.label}
+        </button>
+      ))}
+    </div>
+  );
 }

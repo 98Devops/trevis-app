@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { T, font, Badge, InputField, SelectField, Btn, fmt } from "./p2_helpers.jsx";
+import { T, font, Badge, InputField, SelectField, Btn, fmt, daysSince, daysColor, daysUntilAnniversary } from "./p2_helpers.jsx";
 import { supabase, isConfigured as sbConfigured } from "../lib/supabase";
 import { useAuth } from "./p1_imports_context.jsx";
 
@@ -460,9 +460,19 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
             </div>
           )}
           {student.date && (
-            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12 }}>
-              <span style={{ color:T.muted }}>Check-in</span>
-              <span style={{ color:T.text }}>{student.date}</span>
+            <div>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12,marginBottom:4 }}>
+                <span style={{ color:T.muted }}>Check-in</span>
+                <span style={{ color:T.text }}>{student.date}</span>
+              </div>
+              {(() => {
+                const daysToAnniversary = daysUntilAnniversary(student.date);
+                return daysToAnniversary !== null && (
+                  <div style={{ fontSize:10,color:T.gold,fontWeight:600 }}>
+                    📅 Lease anniversary in {daysToAnniversary} days
+                  </div>
+                );
+              })()}
             </div>
           )}
           {student.idNumber && (
@@ -477,7 +487,22 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
 
         {/* Payment timeline */}
         <div style={{ marginBottom:20 }}>
-          <div style={{ fontSize:13,fontWeight:700,color:T.text,marginBottom:12 }}>Payment History</div>
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
+            <div style={{ fontSize:13,fontWeight:700,color:T.text }}>Payment History</div>
+            {(() => {
+              const lastPayment = paymentHistory[0];
+              if (lastPayment) {
+                const days = daysSince(lastPayment.payment_date || lastPayment.date);
+                const color = daysColor(days);
+                return (
+                  <div style={{ fontSize:11,color,fontWeight:600 }}>
+                    Last paid {days} days ago
+                  </div>
+                );
+              }
+              return null;
+            })()}
+          </div>
           {loadingPayments ? (
             <div style={{ color:T.muted,fontSize:12,fontStyle:"italic" }}>Loading payments...</div>
           ) : paymentHistory.length === 0 ? (
@@ -486,7 +511,20 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
             <>
               {paymentHistory.map((p) => (
                 <div key={p.id} style={{ borderLeft:`2px solid ${ac.accent}`,paddingLeft:12,marginBottom:12,position:"relative" }}>
-                  {confirmDelete === p.id ? (
+                  {editingPayment === p.id ? (
+                    <EditPaymentInline 
+                      payment={p} 
+                      onSave={async (updated) => {
+                        const { updatePayment } = await import('./p1_imports_context.jsx');
+                        await updatePayment(p.id, updated, user?.email || 'system');
+                        const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
+                        const { data } = await getPaymentsByStudent(student.id);
+                        setPaymentHistory(data || []);
+                        setEditingPayment(null);
+                      }}
+                      onCancel={() => setEditingPayment(null)}
+                    />
+                  ) : confirmDelete === p.id ? (
                     <div style={{ background:T.redDim,border:`1px solid ${T.red}40`,borderRadius:8,padding:10 }}>
                       <div style={{ fontSize:12,color:T.red,fontWeight:600,marginBottom:8 }}>Delete payment of {fmt(p.amount)}?</div>
                       <div style={{ display:"flex",gap:6 }}>
@@ -554,5 +592,59 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
         </div>
       </div>
     </>
+  );
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   EDIT PAYMENT INLINE (for StudentProfile)
+═══════════════════════════════════════════════════════════ */
+function EditPaymentInline({ payment, onSave, onCancel }) {
+  const [amount, setAmount] = useState(payment.amount);
+  const [method, setMethod] = useState(payment.payment_method);
+  const [receipt, setReceipt] = useState(payment.receipt_number || '');
+  const [notes, setNotes] = useState(payment.notes || '');
+
+  return (
+    <div style={{ background: T.blueDim, border: `1px solid ${T.blue}40`, borderRadius: 8, padding: 10 }}>
+      <div style={{ fontSize: 12, color: T.blue, fontWeight: 600, marginBottom: 8 }}>Edit Payment</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <input 
+          type="number" 
+          value={amount} 
+          onChange={e => setAmount(e.target.value)}
+          style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 8px", color: T.text, fontSize: 12, fontFamily: font }}
+          placeholder="Amount"
+        />
+        <select 
+          value={method} 
+          onChange={e => setMethod(e.target.value)}
+          style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 8px", color: T.text, fontSize: 12, fontFamily: font }}>
+          <option>Cash</option>
+          <option>EcoCash</option>
+          <option>Bank Transfer</option>
+          <option>Zipit</option>
+          <option>Swipe</option>
+        </select>
+        <input 
+          type="text" 
+          value={receipt} 
+          onChange={e => setReceipt(e.target.value)}
+          style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 8px", color: T.text, fontSize: 12, fontFamily: font }}
+          placeholder="Receipt #"
+        />
+        <input 
+          type="text" 
+          value={notes} 
+          onChange={e => setNotes(e.target.value)}
+          style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 8px", color: T.text, fontSize: 12, fontFamily: font }}
+          placeholder="Notes"
+        />
+        <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+          <button onClick={onCancel} style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 8px", color: T.text, fontSize: 11, cursor: "pointer", fontFamily: font }}>Cancel</button>
+          <button onClick={() => onSave({ amount: Number(amount), payment_method: method, receipt_number: receipt, notes })} style={{ flex: 1, background: T.blue, border: "none", borderRadius: 6, padding: "6px 8px", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: font }}>Save</button>
+        </div>
+      </div>
+    </div>
   );
 }

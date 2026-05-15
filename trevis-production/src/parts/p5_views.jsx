@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { T, font, fmt, Badge, Stat, Bar, Btn } from "./p2_helpers.jsx";
+import { T, font, fmt, Badge, Stat, Bar, Btn, DateRangeFilter } from "./p2_helpers.jsx";
 
 /* ═══════════════════════════════════════════════════════════
    PROPERTY DETAIL VIEW

@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { T, font, fmt, Badge, Bar, Btn } from "./p2_helpers.jsx";
+import { T, font, fmt, Badge, Bar, Btn, daysSince, daysColor, DateRangeFilter } from "./p2_helpers.jsx";
 
 /* ═══════════════════════════════════════════════════════════
    FINANCIAL MANAGEMENT - Complete Financial Hub
@@ -13,6 +13,8 @@ export function Finances({ props, onStudentClick, onRecordPayment, user, initial
   const [propFilter, setPropFilter] = useState(initialPropFilter || "ALL");
   const [viewMode, setViewMode] = useState("students"); // students | rooms | properties
   const [editingPayment, setEditingPayment] = useState(null);
+  const [dateRange, setDateRange] = useState("This Month");
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Build financial records from all properties
   const allRecords = useMemo(() => {
@@ -25,13 +27,13 @@ export function Finances({ props, onStudentClick, onRecordPayment, user, initial
             const balance = r.rent - s.paid;
             const lastPayDate = s.payHistory && s.payHistory.length > 0
               ? new Date(s.payHistory[0].date) : null;
-            const daysSince = lastPayDate
-              ? Math.floor((now - lastPayDate) / (1000*60*60*24))
-              : s.date ? Math.floor((now - new Date(s.date)) / (1000*60*60*24)) : 999;
+            const daysSincePayment = lastPayDate ? daysSince(s.payHistory[0].date) : 
+              (s.date ? daysSince(s.date) : 999);
             return {
               ...s, property: p.name, propertyColor: (T.prop[p.name]||{accent:T.gold}).accent,
               room: r.no, roomId: r.id, rent: r.rent, balance, lastPayDate,
-              daysSince, notes: s.notes || "", status: balance > 0 ? (s.paid > 0 ? "PARTIAL" : "OVERDUE") : "PAID"
+              daysSince: daysSincePayment, notes: s.notes || "", 
+              status: balance > 0 ? (s.paid > 0 ? "PARTIAL" : "OVERDUE") : "PAID"
             };
           })
       )
@@ -50,6 +52,15 @@ export function Finances({ props, onStudentClick, onRecordPayment, user, initial
   const filtered = useMemo(() => {
     let list = buckets[filter] || allRecords;
     if (propFilter !== "ALL") list = list.filter(s => s.property === propFilter);
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(s => 
+        s.name.toLowerCase().includes(q) ||
+        s.property.toLowerCase().includes(q) ||
+        s.room.toLowerCase().includes(q) ||
+        (s.notes && s.notes.toLowerCase().includes(q))
+      );
+    }
     return [...list].sort((a, b) => {
       if (sortCol === "name") return sortDir * a.name.localeCompare(b.name);
       if (sortCol === "property") return sortDir * a.property.localeCompare(b.property);
@@ -57,7 +68,7 @@ export function Finances({ props, onStudentClick, onRecordPayment, user, initial
       if (sortCol === "days") return sortDir * (a.daysSince - b.daysSince);
       return 0;
     });
-  }, [allRecords, filter, sortCol, sortDir, propFilter, buckets]);
+  }, [allRecords, filter, sortCol, sortDir, propFilter, buckets, searchQuery]);
 
   const totalArrears = allRecords.filter(s=>s.balance>0).reduce((a, s) => a + s.balance, 0);
   const totalDue = allRecords.reduce((a, s) => a + s.rent, 0);
@@ -105,6 +116,33 @@ export function Finances({ props, onStudentClick, onRecordPayment, user, initial
           <div style={{ fontSize: 24, fontWeight: 800, color: totalArrears>0?T.red:T.green, fontFamily: "'IBM Plex Mono',monospace" }}>{fmt(totalArrears)}</div>
           <div style={{ fontSize: 11, color: T.gold, marginTop: 4 }}>{collectionRate}% rate</div>
         </div>
+      </div>
+
+      {/* Date Range Filter */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 12, color: T.muted, marginBottom: 8 }}>Date Range</div>
+        <DateRangeFilter value={dateRange} onChange={(range) => setDateRange(range)} />
+      </div>
+
+      {/* Search Bar */}
+      <div style={{ marginBottom: 16 }}>
+        <input 
+          type="text" 
+          value={searchQuery} 
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="🔍 Search by name, property, room, or notes..."
+          style={{ 
+            width: "100%", 
+            background: T.card, 
+            border: `1px solid ${T.border}`, 
+            borderRadius: 10, 
+            padding: "10px 14px", 
+            color: T.text, 
+            fontSize: 13, 
+            fontFamily: font,
+            outline: "none"
+          }}
+        />
       </div>
 
       {/* Aging buckets + filters */}
@@ -168,7 +206,7 @@ export function Finances({ props, onStudentClick, onRecordPayment, user, initial
               <div style={{ fontSize: 12, color: T.subtle, fontFamily: "'IBM Plex Mono',monospace" }}>{fmt(s.rent)}</div>
               <div style={{ fontSize: 12, color: s.paid>=s.rent?T.green:T.amber, fontFamily: "'IBM Plex Mono',monospace" }}>{fmt(s.paid)}</div>
               <div style={{ fontSize: 12, fontWeight: 700, color: s.balance>0?T.red:T.green, fontFamily: "'IBM Plex Mono',monospace" }}>{fmt(s.balance)}</div>
-              <div style={{ fontSize: 11, color: s.daysSince > 60 ? T.red : s.daysSince > 30 ? "#F97316" : T.amber, fontWeight: 600 }}>{s.daysSince}d</div>
+              <div style={{ fontSize: 11, color: daysColor(s.daysSince), fontWeight: 600 }}>{s.daysSince}d</div>
               <Badge status={s.status} />
             </div>
           ))}
@@ -222,7 +260,7 @@ export function Finances({ props, onStudentClick, onRecordPayment, user, initial
               <div><span style={{ color: T.muted }}>Property: </span><span style={{ color: T.subtle }}>{s.property}</span></div>
               <div><span style={{ color: T.muted }}>Room: </span><span style={{ color: T.subtle }}>{s.room}</span></div>
               <div><span style={{ color: T.muted }}>Balance: </span><span style={{ color: T.red, fontWeight: 700 }}>{fmt(s.balance)}</span></div>
-              <div><span style={{ color: T.muted }}>Days: </span><span style={{ color: s.daysSince > 60 ? T.red : T.amber, fontWeight: 600 }}>{s.daysSince}d</span></div>
+              <div><span style={{ color: T.muted }}>Days: </span><span style={{ color: daysColor(s.daysSince), fontWeight: 600 }}>{s.daysSince}d</span></div>
             </div>
             {s.notes && <div style={{ fontSize: 10, color: T.muted, fontStyle: "italic", marginTop: 6 }}>{s.notes}</div>}
           </div>

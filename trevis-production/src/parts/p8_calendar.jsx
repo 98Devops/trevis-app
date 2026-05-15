@@ -1,0 +1,489 @@
+import { useState, useMemo } from "react";
+import { T, font, fmt } from "./p2_helpers.jsx";
+
+export function Calendar({ props, onStudentClick }) {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDay, setSelectedDay] = useState(null);
+  const [paymentDots, setPaymentDots] = useState({});
+  const [obligationDots, setObligationDots] = useState({});
+  const [checkinDots, setCheckinDots] = useState({});
+  const [dayData, setDayData] = useState({ payments: [], obligations: [] });
+
+  // Build calendar data from props
+  const calendarData = useMemo(() => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDay = firstDay.getDay(); // 0 = Sunday
+    const daysInMonth = lastDay.getDate();
+
+    // Reset dots
+    const newPaymentDots = {};
+    const newObligationDots = {};
+    const newCheckinDots = {};
+
+    // Process all properties for calendar events
+    props.forEach(property => {
+      property.rooms.forEach(room => {
+        room.students.forEach(student => {
+          if (student.status === "VACANT" || student.status === "VACATED") return;
+
+          // Check-ins
+          if (student.date && student.date !== "—") {
+            const checkinDate = new Date(student.date);
+            if (checkinDate.getFullYear() === year && checkinDate.getMonth() === month) {
+              const dayKey = checkinDate.getDate();
+              if (!newCheckinDots[dayKey]) newCheckinDots[dayKey] = [];
+              newCheckinDots[dayKey].push({
+                student: student.name,
+                property: property.name,
+                room: room.no,
+                date: student.date
+              });
+            }
+          }
+
+          // Payment history
+          if (student.payHistory && student.payHistory.length > 0) {
+            student.payHistory.forEach(payment => {
+              const payDate = new Date(payment.date);
+              if (payDate.getFullYear() === year && payDate.getMonth() === month) {
+                const dayKey = payDate.getDate();
+                if (!newPaymentDots[dayKey]) newPaymentDots[dayKey] = [];
+                newPaymentDots[dayKey].push({
+                  student: student.name,
+                  property: property.name,
+                  room: room.no,
+                  amount: payment.amount,
+                  method: payment.method || "Cash",
+                  date: payment.date
+                });
+              }
+            });
+          }
+
+          // Obligations (unpaid balances)
+          const balance = room.rent - student.paid;
+          if (balance > 0) {
+            // Show obligations on the 1st of the month
+            if (!newObligationDots[1]) newObligationDots[1] = [];
+            newObligationDots[1].push({
+              student: student.name,
+              property: property.name,
+              room: room.no,
+              amount: balance,
+              status: student.status
+            });
+          }
+        });
+      });
+    });
+
+    // Build 42-cell grid (6 weeks × 7 days)
+    const cells = [];
+    for (let i = 0; i < 42; i++) {
+      const dayNum = i - startDay + 1;
+      const isCurrentMonth = dayNum >= 1 && dayNum <= daysInMonth;
+      const date = isCurrentMonth ? new Date(year, month, dayNum) : null;
+      const isToday = date && date.toDateString() === new Date().toDateString();
+
+      cells.push({
+        index: i,
+        dayNum: isCurrentMonth ? dayNum : null,
+        date,
+        isToday,
+        hasPayments: newPaymentDots[dayNum]?.length > 0,
+        hasCheckins: newCheckinDots[dayNum]?.length > 0,
+        hasObligations: newObligationDots[dayNum]?.length > 0,
+        paymentCount: newPaymentDots[dayNum]?.length || 0,
+        checkinCount: newCheckinDots[dayNum]?.length || 0,
+        obligationCount: newObligationDots[dayNum]?.length || 0
+      });
+    }
+
+    setPaymentDots(newPaymentDots);
+    setObligationDots(newObligationDots);
+    setCheckinDots(newCheckinDots);
+
+    return { cells };
+  }, [currentDate, props]);
+
+  // Navigation
+  const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+  const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  const today = () => setCurrentDate(new Date());
+
+  const monthLabel = currentDate.toLocaleString("en-US", { month: "long", year: "numeric" });
+  const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  // Handle day click
+  const handleDayClick = (cell) => {
+    if (!cell.dayNum) return;
+    
+    const dayPayments = paymentDots[cell.dayNum] || [];
+    const dayObligations = obligationDots[cell.dayNum] || [];
+    const dayCheckins = checkinDots[cell.dayNum] || [];
+    
+    setDayData({
+      date: cell.date,
+      payments: dayPayments,
+      obligations: dayObligations,
+      checkins: dayCheckins
+    });
+    setSelectedDay(cell);
+  };
+
+  // Upcoming events (next 7 days)
+  const upcomingEvents = useMemo(() => {
+    const now = new Date();
+    const events = [];
+    
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(now);
+      date.setDate(now.getDate() + i);
+      
+      if (date.getMonth() === currentDate.getMonth() && date.getFullYear() === currentDate.getFullYear()) {
+        const dayNum = date.getDate();
+        const payments = paymentDots[dayNum] || [];
+        const obligations = obligationDots[dayNum] || [];
+        const checkins = checkinDots[dayNum] || [];
+        
+        if (payments.length > 0 || obligations.length > 0 || checkins.length > 0) {
+          events.push({
+            date,
+            dayOffset: i,
+            payments,
+            obligations,
+            checkins
+          });
+        }
+      }
+    }
+    
+    return events;
+  }, [currentDate, paymentDots, obligationDots, checkinDots]);
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 13, color: T.gold, textTransform: "uppercase", letterSpacing: "0.15em", fontWeight: 600, marginBottom: 4 }}>
+          {monthLabel}
+        </h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: T.text, margin: 0 }}>Calendar</h1>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={prevMonth} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 14px", cursor: "pointer", color: T.text, fontFamily: font, fontSize: 13, fontWeight: 600 }}>
+              ← Prev
+            </button>
+            <button onClick={today} style={{ background: T.goldDim, border: `1px solid ${T.gold}40`, borderRadius: 8, padding: "8px 14px", cursor: "pointer", color: T.gold, fontFamily: font, fontSize: 13, fontWeight: 600 }}>
+              Today
+            </button>
+            <button onClick={nextMonth} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 14px", cursor: "pointer", color: T.text, fontFamily: font, fontSize: 13, fontWeight: 600 }}>
+              Next →
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: T.subtle }}>
+          <span style={{ color: T.green, fontSize: 12 }}>●</span>
+          Payments
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: T.subtle }}>
+          <span style={{ color: T.red, fontSize: 12 }}>●</span>
+          Overdue
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: T.subtle }}>
+          <span style={{ color: T.gold, fontSize: 12 }}>●</span>
+          Check-ins
+        </div>
+      </div>
+
+      {/* Calendar Grid - Desktop */}
+      <div className="pn-calendar-desktop" style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, overflow: "hidden", marginBottom: 20 }}>
+        {/* Week headers */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", background: T.surface, borderBottom: `1px solid ${T.border}` }}>
+          {weekDays.map(day => (
+            <div key={day} style={{ padding: "12px 8px", textAlign: "center", fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 600 }}>
+              {day}
+            </div>
+          ))}
+        </div>
+        
+        {/* Calendar cells */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
+          {calendarData.cells.map(cell => (
+            <div key={cell.index} onClick={() => handleDayClick(cell)}
+              style={{ 
+                minHeight: 90, 
+                padding: 8, 
+                border: `1px solid ${T.border}20`, 
+                cursor: cell.dayNum ? "pointer" : "default",
+                background: cell.isToday ? `${T.gold}15` : 
+                           (cell.hasPayments || cell.hasCheckins || cell.hasObligations) ? `${T.blue}08` :
+                           cell.dayNum ? T.card : T.surface,
+                borderLeft: cell.isToday ? `3px solid ${T.gold}` : `1px solid ${T.border}20`,
+                transition: "all .15s",
+                position: "relative"
+              }}
+              onMouseEnter={e => cell.dayNum && (e.currentTarget.style.background = cell.isToday ? `${T.gold}20` : T.hover)}
+              onMouseLeave={e => cell.dayNum && (e.currentTarget.style.background = 
+                cell.isToday ? `${T.gold}15` : 
+                (cell.hasPayments || cell.hasCheckins || cell.hasObligations) ? `${T.blue}08` : T.card
+              )}>
+              
+              {cell.dayNum && (
+                <>
+                  {/* Day number */}
+                  <div style={{ 
+                    fontSize: 13, 
+                    fontWeight: cell.isToday ? 700 : 600, 
+                    color: cell.isToday ? T.gold : T.text, 
+                    marginBottom: 6 
+                  }}>
+                    {cell.dayNum}
+                  </div>
+                  
+                  {/* Event dots */}
+                  <div style={{ display: "flex", gap: 3, flexWrap: "wrap", position: "absolute", bottom: 6, left: 6 }}>
+                    {cell.hasPayments && (
+                      <div style={{ 
+                        width: 6, height: 6, borderRadius: "50%", background: T.green,
+                        display: "flex", alignItems: "center", justifyContent: "center"
+                      }} title={`${cell.paymentCount} payments`} />
+                    )}
+                    {cell.hasObligations && (
+                      <div style={{ 
+                        width: 6, height: 6, borderRadius: "50%", background: T.red,
+                        display: "flex", alignItems: "center", justifyContent: "center"
+                      }} title={`${cell.obligationCount} overdue`} />
+                    )}
+                    {cell.hasCheckins && (
+                      <div style={{ 
+                        width: 6, height: 6, borderRadius: "50%", background: T.gold,
+                        display: "flex", alignItems: "center", justifyContent: "center"
+                      }} title={`${cell.checkinCount} check-ins`} />
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Calendar Mobile */}
+      <div className="pn-calendar-mobile" style={{ display: "none", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+        {calendarData.cells.filter(c => c.dayNum && (c.hasPayments || c.hasCheckins || c.hasObligations)).map(cell => (
+          <div key={cell.index + "m"} onClick={() => handleDayClick(cell)}
+            style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, cursor: "pointer" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: cell.isToday ? T.gold : T.text, marginBottom: 8 }}>
+              {cell.date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+            </div>
+            <div style={{ display: "flex", gap: 12, fontSize: 11, flexWrap: "wrap" }}>
+              {cell.hasPayments && <span style={{ color: T.green }}>● {cell.paymentCount} payments</span>}
+              {cell.hasObligations && <span style={{ color: T.red }}>● {cell.obligationCount} overdue</span>}
+              {cell.hasCheckins && <span style={{ color: T.gold }}>● {cell.checkinCount} check-ins</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* Upcoming Events Strip */}
+      {upcomingEvents.length > 0 && (
+        <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20, marginBottom: 20 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 12 }}>📅 Upcoming (Next 7 Days)</div>
+          <div className="pn-upcoming-desktop" style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
+            {upcomingEvents.map((event, i) => (
+              <div key={i} onClick={() => handleDayClick({ dayNum: event.date.getDate(), date: event.date })}
+                style={{ 
+                  minWidth: 140, 
+                  background: T.surface, 
+                  border: `1px solid ${T.border}`, 
+                  borderRadius: 10, 
+                  padding: 12, 
+                  cursor: "pointer",
+                  transition: "background .15s"
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = T.hover}
+                onMouseLeave={e => e.currentTarget.style.background = T.surface}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: T.text, marginBottom: 6 }}>
+                  {event.dayOffset === 0 ? "TODAY" : `+${event.dayOffset}`} {event.date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                </div>
+                <div style={{ fontSize: 10, color: T.subtle }}>
+                  {event.payments.length > 0 && `${event.payments.length} payments`}
+                  {event.payments.length > 0 && event.obligations.length > 0 && " · "}
+                  {event.obligations.length > 0 && `${event.obligations.length} overdue`}
+                  {(event.payments.length > 0 || event.obligations.length > 0) && event.checkins.length > 0 && " · "}
+                  {event.checkins.length > 0 && `${event.checkins.length} check-ins`}
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {/* Mobile upcoming - vertical list */}
+          <div className="pn-upcoming-mobile" style={{ display: "none", flexDirection: "column", gap: 8 }}>
+            {upcomingEvents.map((event, i) => (
+              <div key={i + "m"} onClick={() => handleDayClick({ dayNum: event.date.getDate(), date: event.date })}
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: i < upcomingEvents.length - 1 ? `1px solid ${T.border}20` : "none", cursor: "pointer" }}>
+                <div style={{ fontSize: 12, color: T.text }}>
+                  {event.dayOffset === 0 ? "TODAY" : `+${event.dayOffset}`} {event.date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                </div>
+                <div style={{ fontSize: 10, color: T.subtle }}>
+                  {event.payments.length + event.obligations.length + event.checkins.length} events
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Day Panel */}
+      {selectedDay && (
+        <DayPanel 
+          dayData={dayData} 
+          onClose={() => setSelectedDay(null)} 
+          onStudentClick={onStudentClick}
+        />
+      )}
+    </div>
+  );
+}
+
+/* Day Panel Component */
+function DayPanel({ dayData, onClose, onStudentClick }) {
+  const dateLabel = dayData.date?.toLocaleDateString("en-US", { 
+    weekday: "long", 
+    month: "long", 
+    day: "numeric", 
+    year: "numeric" 
+  });
+  
+  const totalPayments = dayData.payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+  const totalObligations = dayData.obligations.length;
+  const paidObligations = dayData.obligations.filter(o => o.status === "PAID").length;
+  const unpaidObligations = totalObligations - paidObligations;
+
+  return (
+    <div onClick={onClose} style={{ 
+      position: "fixed", 
+      inset: 0, 
+      background: "rgba(0,0,0,.6)", 
+      display: "flex", 
+      alignItems: "center", 
+      justifyContent: "center", 
+      zIndex: 1000 
+    }}>
+      <div onClick={e => e.stopPropagation()} className="pn-day-panel-inner"
+        style={{ 
+          background: T.card, 
+          border: `1px solid ${T.border}`, 
+          borderRadius: 16, 
+          padding: 32, 
+          width: 480, 
+          maxWidth: "90%", 
+          maxHeight: "80vh", 
+          overflowY: "auto" 
+        }}>
+        
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: T.text }}>{dateLabel}</div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>
+              {dayData.payments.length} payments · {dayData.checkins.length} check-ins · {dayData.obligations.length} obligations
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 20 }}>✕</button>
+        </div>
+
+        {/* Payments */}
+        {dayData.payments.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.green, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+              <span>💰 PAYMENTS RECORDED ({dayData.payments.length})</span>
+              {totalPayments > 0 && <span style={{ fontSize: 11, color: T.muted }}>({fmt(totalPayments)} total)</span>}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {dayData.payments.map((payment, i) => (
+                <div key={i} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>● {payment.student}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: T.green, fontFamily: "'IBM Plex Mono',monospace" }}>
+                      {fmt(payment.amount)} {payment.method}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 11, color: T.muted }}>{payment.property} — {payment.room}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Obligations */}
+        {dayData.obligations.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.red, marginBottom: 10 }}>
+              ⚠ OBLIGATIONS DUE ({totalObligations})
+            </div>
+            <div style={{ fontSize: 12, color: T.subtle, marginBottom: 10 }}>
+              {paidObligations} paid · {unpaidObligations} overdue
+              <button style={{ 
+                marginLeft: 12, 
+                background: T.goldDim, 
+                border: `1px solid ${T.gold}40`, 
+                borderRadius: 6, 
+                padding: "4px 8px", 
+                color: T.gold, 
+                fontSize: 10, 
+                cursor: "pointer", 
+                fontFamily: font 
+              }}>
+                View in Finances →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Check-ins */}
+        {dayData.checkins.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.gold, marginBottom: 10 }}>🏠 CHECK-INS ({dayData.checkins.length})</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {dayData.checkins.map((checkin, i) => (
+                <div key={i} 
+                  onClick={() => onStudentClick && onStudentClick(
+                    { name: checkin.student, date: checkin.date }, 
+                    { no: checkin.room }, 
+                    checkin.property
+                  )}
+                  style={{ 
+                    background: T.surface, 
+                    border: `1px solid ${T.border}`, 
+                    borderRadius: 10, 
+                    padding: 12, 
+                    cursor: "pointer", 
+                    transition: "background .15s" 
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = T.hover}
+                  onMouseLeave={e => e.currentTarget.style.background = T.surface}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>● {checkin.student}</div>
+                  <div style={{ fontSize: 11, color: T.muted }}>{checkin.property} — {checkin.room}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {dayData.payments.length === 0 && dayData.checkins.length === 0 && dayData.obligations.length === 0 && (
+          <div style={{ padding: 32, textAlign: "center", color: T.muted, fontSize: 13 }}>
+            No events on this date.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
