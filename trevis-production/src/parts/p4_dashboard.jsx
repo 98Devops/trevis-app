@@ -1,10 +1,10 @@
 import { useState, useMemo } from "react";
-import { T, font, fmt, Badge, Stat, Bar, Btn } from "./p2_helpers.jsx";
+import { T, font, fmt, Badge, Stat, Bar, Btn, formatDateLong } from "./p2_helpers.jsx";
 
 /* ═══════════════════════════════════════════════════════════
    DASHBOARD VIEW
 ═══════════════════════════════════════════════════════════ */
-export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onExport }) {
+export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onExport, onStudentClick, onPropertyCardClick }) {
   const [timeRange, setTimeRange] = useState("month");
   const [sortCol, setSortCol] = useState("name");
   const [sortDir, setSortDir] = useState(1);
@@ -20,6 +20,7 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
   const rate = totals.expected > 0 ? ((totals.collected / totals.expected) * 100).toFixed(1) : "0.0";
   const now = new Date();
   const monthYear = now.toLocaleString("en-US", { month:"long", year:"numeric" });
+  const todayLabel = formatDateLong(now);
 
   const allOverdue = props.flatMap(p => p.overdue.map(s => ({ ...s, property: p.name })));
   const sorted = [...allOverdue].sort((a,b) => {
@@ -34,6 +35,7 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
     <div>
       <div style={{ marginBottom:24 }}>
         <h2 style={{ fontSize:13, color:T.gold, textTransform:"uppercase", letterSpacing:"0.15em", fontWeight:600, marginBottom:4 }}>{monthYear}</h2>
+        <div style={{ fontSize:11, color:T.subtle, marginBottom:8 }}>{todayLabel}</div>
         <div className="pn-header-row" style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <h1 style={{ fontSize:28, fontWeight:800, color:T.text, margin:0 }}>Portfolio Overview</h1>
           <div style={{ display:"flex", gap:4, background:T.surface, borderRadius:8, padding:2 }}>
@@ -80,7 +82,7 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
                       </div>
                     </div>
                   ) : (<>
-                    <div style={{ width:20, height:`${ePct}%`, background:"rgba(56, 189, 248, 0.7)", borderRadius:"4px 4px 0 0", position:"relative" }}>
+                    <div style={{ width:20, height:`${ePct}%`, background:"#38BDF8", borderRadius:"4px 4px 0 0", position:"relative" }}>
                       <div style={{ position:"absolute",bottom:"100%",left:0,whiteSpace:"nowrap",fontSize:10,color:"#38BDF8",paddingBottom:10 }}>
                         {fmt(p.expected)}
                       </div>
@@ -108,7 +110,7 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
                 <div style={{ fontSize:11, color:T.text, fontWeight:600, marginBottom:6 }}>{p.name}</div>
                 <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <div style={{ height:14, width:`${ePct}%`, background:"rgba(56, 189, 248, 0.7)", borderRadius:3, minWidth:20 }} />
+                    <div style={{ height:14, width:`${ePct}%`, background:"#38BDF8", borderRadius:3, minWidth:20 }} />
                     <span style={{ fontSize:10, color:"#38BDF8", whiteSpace:"nowrap" }}>{fmt(p.expected)}</span>
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
@@ -121,7 +123,7 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
           })}
         </div>
         <div style={{ display:"flex",gap:20,justifyContent:"center",marginTop:16 }}>
-          <span style={{ display:"flex",alignItems:"center",gap:5,fontSize:10,color:"#38BDF8" }}><span style={{width:10,height:10,borderRadius:2,background:"rgba(56, 189, 248, 0.7)",display:"inline-block"}} /> Expected</span>
+          <span style={{ display:"flex",alignItems:"center",gap:5,fontSize:10,color:"#38BDF8" }}><span style={{width:10,height:10,borderRadius:2,background:"#38BDF8",display:"inline-block"}} /> Expected</span>
           <span style={{ display:"flex",alignItems:"center",gap:5,fontSize:10,color:"#F59E0B" }}><span style={{width:10,height:10,borderRadius:2,background:"#F59E0B",display:"inline-block"}} /> Collected</span>
         </div>
       </div>
@@ -133,27 +135,29 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
           const pct = p.expected > 0 ? ((p.collected / p.expected) * 100).toFixed(0) : 0;
           const arrears = p.expected - p.collected;
           return (
-            <div key={p.name} onClick={() => onSelect(p.name)}
+            <div key={p.name}
               style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:16,
                 padding:24, cursor:"pointer", transition:"all .18s", borderLeft:`3px solid ${ac.accent}` }}
               onMouseEnter={e => e.currentTarget.style.background = T.hover}
               onMouseLeave={e => e.currentTarget.style.background = T.card}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16 }}>
-                <div>
-                  <div style={{ fontSize:16, fontWeight:800, color:T.text }}>{p.name}</div>
-                  <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>{p.rooms.length} rooms · {p.students} students</div>
+              <div onClick={() => onSelect(p.name)} style={{ marginBottom:16 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                  <div>
+                    <div style={{ fontSize:16, fontWeight:800, color:T.text }}>{p.name}</div>
+                    <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>{p.rooms.length} rooms · {p.students} students</div>
+                  </div>
+                  <div style={{ background: ac.dim, color: ac.accent, padding:"4px 12px", borderRadius:20, fontSize:11, fontWeight:700 }}>{pct}%</div>
                 </div>
-                <div style={{ background: ac.dim, color: ac.accent, padding:"4px 12px", borderRadius:20, fontSize:11, fontWeight:700 }}>{pct}%</div>
               </div>
               <Bar pct={Number(pct)} color={ac.accent} />
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8, marginTop:16 }}>
                 {[
-                  { label:"Collected", val:fmt(p.collected), c:T.green },
-                  { label:"Arrears", val:fmt(arrears), c: arrears>0?T.red:T.green },
-                  { label:"Vacant", val:p.vacantBeds, c:p.vacantBeds>0?T.amber:T.green },
-                  { label:"Alerts", val:p.overdue.length, c:p.overdue.length>0?T.red:T.green },
+                  { label:"Collected", val:fmt(p.collected), c:T.green, onClick:null },
+                  { label:"Arrears", val:fmt(arrears), c: arrears>0?T.red:T.green, onClick: arrears>0 ? (e)=>{e.stopPropagation();onPropertyCardClick&&onPropertyCardClick(p.name);} : null },
+                  { label:"Vacant", val:p.vacantBeds, c:p.vacantBeds>0?T.amber:T.green, onClick:null },
+                  { label:"Alerts", val:p.overdue.length, c:p.overdue.length>0?T.red:T.green, onClick: p.overdue.length>0 ? (e)=>{e.stopPropagation();onPropertyCardClick&&onPropertyCardClick(p.name);} : null },
                 ].map(x => (
-                  <div key={x.label}>
+                  <div key={x.label} onClick={x.onClick} style={{ cursor: x.onClick ? "pointer" : "default" }}>
                     <div style={{ fontSize:9, color:T.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:3 }}>{x.label}</div>
                     <div style={{ fontSize:16, fontWeight:700, color:x.c, fontFamily:"'IBM Plex Mono',monospace" }}>{x.val}</div>
                   </div>
@@ -182,8 +186,8 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
             {sorted.length === 0 ? (
               <div style={{ padding:24, textAlign:"center", color:T.muted, fontSize:13 }}>🎉 No outstanding issues!</div>
             ) : sorted.map(s => (
-              <div key={s.id} style={{ display:"grid", gridTemplateColumns:"2fr 1.2fr 1fr 1fr 1fr", gap:8, padding:"12px 24px",
-                borderBottom:`1px solid ${T.border}20`, alignItems:"center", transition:"background .15s" }}
+              <div key={s.id} onClick={()=>onStudentClick&&onStudentClick(s,{no:s.room,rent:s.roomRent},s.property)} style={{ display:"grid", gridTemplateColumns:"2fr 1.2fr 1fr 1fr 1fr", gap:8, padding:"12px 24px",
+                borderBottom:`1px solid ${T.border}20`, alignItems:"center", transition:"background .15s", cursor:"pointer" }}
                 onMouseEnter={e=>e.currentTarget.style.background=T.hover} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                 <div>
                   <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{s.name}</div>
@@ -202,7 +206,7 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
           {sorted.length === 0 ? (
             <div style={{ padding:20, textAlign:"center", color:T.muted, fontSize:13 }}>🎉 No outstanding issues!</div>
           ) : sorted.map(s => (
-            <div key={s.id+"m"} style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:10, padding:14 }}>
+            <div key={s.id+"m"} onClick={()=>onStudentClick&&onStudentClick(s,{no:s.room,rent:s.rent},s.property)} style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:10, padding:14, cursor:"pointer" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
                 <div style={{ fontSize:14, fontWeight:700, color:T.text }}>{s.name}</div>
                 <Badge status={s.status} />

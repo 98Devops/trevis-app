@@ -334,17 +334,59 @@ export function PaymentModal({ open, onClose, prop, onRecord, user, allProps }) 
 /* ═══════════════════════════════════════════════════════════
    STUDENT PROFILE PANEL (slide-in)
 ═══════════════════════════════════════════════════════════ */
-export function StudentProfile({ student, room, propName, onClose, onRecordPay, onRemove, isAdmin }) {
+export function StudentProfile({ student, room, propName, onClose, onRecordPay, onRemove, isAdmin, user }) {
   if (!student) return null;
   const ac = T.prop[propName] || { accent:T.gold };
   const balance = room.rent - student.paid;
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [editingPayment, setEditingPayment] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [paymentHistory, setPaymentHistory] = useState([]);
+  const [loadingPayments, setLoadingPayments] = useState(true);
+
+  // Fetch payment history on mount
+  useEffect(() => {
+    const fetchPayments = async () => {
+      if (!student.id) return;
+      setLoadingPayments(true);
+      const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
+      const { data } = await getPaymentsByStudent(student.id);
+      setPaymentHistory(data || []);
+      setLoadingPayments(false);
+    };
+    fetchPayments();
+  }, [student.id]);
 
   const handleWhatsApp = () => {
     if (!student.phone) return;
     const phone = student.phone.replace(/[^0-9]/g,'');
     const fullPhone = phone.startsWith('263') ? phone : phone.startsWith('0') ? '263'+phone.slice(1) : '263'+phone;
     window.open(`https://wa.me/${fullPhone}`, '_blank');
+  };
+
+  const handleEditPayment = async (paymentId, field, value) => {
+    const { updatePayment } = await import('./p1_imports_context.jsx');
+    const updates = { [field]: value };
+    const { error } = await updatePayment(paymentId, updates, user?.email || 'system');
+    if (!error) {
+      // Refresh payment history
+      const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
+      const { data } = await getPaymentsByStudent(student.id);
+      setPaymentHistory(data || []);
+      setEditingPayment(null);
+    }
+  };
+
+  const handleDeletePayment = async (paymentId) => {
+    const { deletePayment } = await import('./p1_imports_context.jsx');
+    const { error } = await deletePayment(paymentId);
+    if (!error) {
+      // Refresh payment history
+      const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
+      const { data } = await getPaymentsByStudent(student.id);
+      setPaymentHistory(data || []);
+      setConfirmDelete(null);
+    }
   };
 
   const handlePrintStatement = () => {
@@ -436,19 +478,49 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
         {/* Payment timeline */}
         <div style={{ marginBottom:20 }}>
           <div style={{ fontSize:13,fontWeight:700,color:T.text,marginBottom:12 }}>Payment History</div>
-          {(!student.payHistory || student.payHistory.length === 0) ? (
+          {loadingPayments ? (
+            <div style={{ color:T.muted,fontSize:12,fontStyle:"italic" }}>Loading payments...</div>
+          ) : paymentHistory.length === 0 ? (
             <div style={{ color:T.muted,fontSize:12,fontStyle:"italic" }}>No payments recorded</div>
-          ) : student.payHistory.map((p,i) => (
-            <div key={i} style={{ borderLeft:`2px solid ${ac.accent}`,paddingLeft:12,marginBottom:12 }}>
-              <div style={{ display:"flex",justifyContent:"space-between" }}>
-                <span style={{ fontSize:13,fontWeight:700,color:T.green }}>{fmt(p.amount)}</span>
-                <span style={{ fontSize:11,color:T.muted }}>{p.date}</span>
+          ) : (
+            <>
+              {paymentHistory.map((p) => (
+                <div key={p.id} style={{ borderLeft:`2px solid ${ac.accent}`,paddingLeft:12,marginBottom:12,position:"relative" }}>
+                  {confirmDelete === p.id ? (
+                    <div style={{ background:T.redDim,border:`1px solid ${T.red}40`,borderRadius:8,padding:10 }}>
+                      <div style={{ fontSize:12,color:T.red,fontWeight:600,marginBottom:8 }}>Delete payment of {fmt(p.amount)}?</div>
+                      <div style={{ display:"flex",gap:6 }}>
+                        <button onClick={()=>setConfirmDelete(null)} style={{ flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:6,padding:"4px 8px",color:T.text,fontSize:11,cursor:"pointer",fontFamily:font }}>Cancel</button>
+                        <button onClick={()=>handleDeletePayment(p.id)} style={{ flex:1,background:T.red,border:"none",borderRadius:6,padding:"4px 8px",color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:font }}>Delete</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                        <span style={{ fontSize:13,fontWeight:700,color:T.green }}>{fmt(p.amount)}</span>
+                        <div style={{ display:"flex",gap:6,alignItems:"center" }}>
+                          <span style={{ fontSize:11,color:T.muted }}>{p.payment_date}</span>
+                          {isAdmin && (
+                            <div style={{ display:"flex",gap:4 }}>
+                              <button onClick={()=>setEditingPayment(p.id)} style={{ background:"none",border:"none",cursor:"pointer",color:T.blue,fontSize:12,padding:2 }} title="Edit">✏️</button>
+                              <button onClick={()=>setConfirmDelete(p.id)} style={{ background:"none",border:"none",cursor:"pointer",color:T.red,fontSize:12,padding:2 }} title="Delete">🗑️</button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ fontSize:11,color:T.subtle }}>{p.payment_method}{p.receipt_number ? ` · #${p.receipt_number}` : ""}</div>
+                      {p.notes && <div style={{ fontSize:11,color:T.muted,fontStyle:"italic" }}>{p.notes}</div>}
+                      <div style={{ fontSize:10,color:T.muted }}>by {p.recorded_by}</div>
+                      {p.edited_by && <div style={{ fontSize:10,color:T.amber }}>edited by {p.edited_by}</div>}
+                    </>
+                  )}
+                </div>
+              ))}
+              <div style={{ fontSize:11,color:T.muted,marginTop:12,paddingTop:12,borderTop:`1px solid ${T.border}30` }}>
+                Total paid all time: {fmt(paymentHistory.reduce((sum,p)=>sum+(p.amount||0),0))} across {paymentHistory.length} payment{paymentHistory.length !== 1 ? 's' : ''}
               </div>
-              <div style={{ fontSize:11,color:T.subtle }}>{p.method}{p.receipt ? ` · #${p.receipt}` : ""}</div>
-              {p.notes && <div style={{ fontSize:11,color:T.muted,fontStyle:"italic" }}>{p.notes}</div>}
-              <div style={{ fontSize:10,color:T.muted }}>by {p.recordedBy}</div>
-            </div>
-          ))}
+            </>
+          )}
         </div>
 
         {/* Action buttons — all staff actions */}

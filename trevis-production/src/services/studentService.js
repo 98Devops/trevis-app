@@ -4,8 +4,9 @@ export async function getStudentsByProperty(propertyId) {
   if (!isConfigured) return { data: [], error: null };
   const { data, error } = await supabase
     .from('students')
-    .select(`*, rooms!inner(id, room_number, bed_capacity, rent_per_bed, property_id, properties(id, name))`)
+    .select(`*, rooms!inner(id, room_number, bed_capacity, rent_per_bed, property_id, is_active, properties(id, name))`)
     .eq('rooms.property_id', propertyId)
+    .eq('rooms.is_active', true)
     .order('full_name');
   return { data: data || [], error };
 }
@@ -14,7 +15,7 @@ export async function getStudentById(id) {
   if (!isConfigured) return { data: null, error: null };
   const { data, error } = await supabase
     .from('students')
-    .select(`*, rooms(id, room_number, bed_capacity, rent_per_bed, property_id, properties(id, name, color_accent))`)
+    .select(`*, rooms(id, room_number, bed_capacity, rent_per_bed, property_id, is_active, properties(id, name, color_accent))`)
     .eq('id', id)
     .single();
   return { data, error };
@@ -56,7 +57,8 @@ export async function searchStudents(query) {
   if (!isConfigured) return { data: [], error: null };
   const { data, error } = await supabase
     .from('students')
-    .select(`*, rooms(id, room_number, rent_per_bed, properties(id, name))`)
+    .select(`*, rooms!inner(id, room_number, rent_per_bed, is_active, properties(id, name))`)
+    .eq('rooms.is_active', true)
     .ilike('full_name', `%${query}%`)
     .order('full_name');
   return { data: data || [], error };
@@ -66,7 +68,8 @@ export async function getDataFlags() {
   if (!isConfigured) return { data: [], error: null };
   const { data, error } = await supabase
     .from('students')
-    .select(`*, rooms(id, room_number, rent_per_bed, properties(id, name))`)
+    .select(`*, rooms!inner(id, room_number, rent_per_bed, is_active, properties(id, name))`)
+    .eq('rooms.is_active', true)
     .not('data_flags', 'is', null)
     .order('full_name');
   return { data: data || [], error };

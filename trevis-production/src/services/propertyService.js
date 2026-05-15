@@ -99,10 +99,10 @@ export async function removeRoom(roomId, userId) {
     };
   }
   
-  // Soft delete: set is_active = false
+  // Hard delete: remove from database
   const { data, error } = await supabase
     .from('rooms')
-    .update({ is_active: false, updated_at: new Date().toISOString() })
+    .delete()
     .eq('id', roomId)
     .select()
     .single();

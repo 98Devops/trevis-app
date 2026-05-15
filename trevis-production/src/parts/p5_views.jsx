@@ -103,12 +103,27 @@ function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom }) 
               <div style={{ justifySelf: "end" }}><Badge status={s.status} /></div>
             </div>
           ))}
-          <div style={{ padding:"12px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", background:T.surface, borderTop:`1px solid ${T.border}40`, marginTop:4 }}>
-            <div style={{ fontSize:11, color:T.muted }}>
-              Room total: <span style={{color:T.text}}>${expected}</span> expected · <span style={{color:T.green}}>${collected}</span> collected · <span style={{color:outstanding>0?T.red:T.text}}>${outstanding}</span> outstanding.
+          <div style={{ padding:"14px 20px", background:T.surface, borderTop:`1px solid ${T.border}40`, marginTop:4 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:isAdmin?10:0 }}>
+              <div>
+                <div style={{ fontSize:9, color:T.muted, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:3 }}>Expected</div>
+                <div style={{ fontSize:15, fontWeight:700, color:T.text, fontFamily:"'IBM Plex Mono',monospace" }}>${expected}</div>
+              </div>
+              <div>
+                <div style={{ fontSize:9, color:T.muted, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:3 }}>Collected</div>
+                <div style={{ fontSize:15, fontWeight:700, color:T.green, fontFamily:"'IBM Plex Mono',monospace" }}>${collected}</div>
+              </div>
+              <div>
+                <div style={{ fontSize:9, color:T.muted, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:3 }}>Outstanding</div>
+                <div style={{ fontSize:15, fontWeight:700, color:outstanding>0?T.red:T.green, fontFamily:"'IBM Plex Mono',monospace" }}>${outstanding}</div>
+              </div>
+              <div>
+                <div style={{ fontSize:9, color:T.muted, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:3 }}>Rate</div>
+                <div style={{ fontSize:15, fontWeight:700, color:pct===100?T.green:T.amber }}>{pct}%</div>
+              </div>
             </div>
             {isAdmin && (
-              <button onClick={handleRemove} style={{ background:T.redDim, border:`1px solid ${T.red}40`, color:T.red, fontSize:10, fontWeight:700, padding:"4px 8px", borderRadius:6, cursor:"pointer" }}>
+              <button onClick={handleRemove} style={{ background:T.redDim, border:`1px solid ${T.red}40`, color:T.red, fontSize:10, fontWeight:700, padding:"5px 10px", borderRadius:6, cursor:"pointer", width:"100%" }}>
                 Remove Room
               </button>
             )}
@@ -122,7 +137,7 @@ function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom }) 
 /* ═══════════════════════════════════════════════════════════
    STUDENTS GLOBAL LIST
 ═══════════════════════════════════════════════════════════ */
-export function Students({ props, onAddStudent }) {
+export function Students({ props, onAddStudent, onStudentClick }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("ALL");
   const [showVacated, setShowVacated] = useState(false);
@@ -200,7 +215,7 @@ export function Students({ props, onAddStudent }) {
         ) : filtered.map(s => {
           const ac = T.prop[s.property] || { accent: T.gold };
           return (
-            <div key={s.id+"m"} style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:14,borderLeft:`3px solid ${ac.accent}` }}>
+            <div key={s.id+"m"} onClick={()=>onStudentClick&&onStudentClick(s,{no:s.room,rent:s.rent},s.property)} style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:14,borderLeft:`3px solid ${ac.accent}`,cursor:"pointer" }}>
               <div style={{ fontSize:14,fontWeight:700,color:T.text,marginBottom:4 }}>{s.name}</div>
               <div style={{ fontSize:12,color:T.subtle,marginBottom:8 }}>{s.property} · {s.room}</div>
               <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr auto",gap:6,alignItems:"center" }}>

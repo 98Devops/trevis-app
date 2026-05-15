@@ -5,7 +5,8 @@ import { LoginScreen, NotConfiguredScreen, AddStudentWizard, AddRoomModal, Payme
 import { Dashboard } from "./parts/p4_dashboard.jsx";
 import { PropertyDetail, Students } from "./parts/p5_views.jsx";
 import { Reports } from "./parts/p6_reports.jsx";
-import { Arrears } from "./parts/p7_arrears.jsx";
+import { Finances } from "./parts/p7_arrears.jsx";
+// import { Calendar } from "./parts/p8_calendar.jsx"; // TODO: Re-enable after file system issue resolved
 
 /* ═══════════════════════════════════════════════════════════
    NAVIGATION
@@ -13,7 +14,8 @@ import { Arrears } from "./parts/p7_arrears.jsx";
 const NAV = [
   { id:"dashboard", label:"Dashboard", icon:"⬡" },
   { id:"students",  label:"Students",  icon:"◎" },
-  { id:"arrears",   label:"Arrears",   icon:"◈" },
+  { id:"finances",  label:"Finances",  icon:"◈" },
+  // { id:"calendar",  label:"Calendar",  icon:"📅" }, // TODO: Re-enable after file system issue resolved
   { id:"reports",   label:"Reports",   icon:"▦" },
 ];
 
@@ -58,6 +60,7 @@ function AppInner() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(true);
   const [toast, setToast] = useState(null);
+  const [financesFilter, setFinancesFilter] = useState("ALL");
 
   // Build UI props from raw Supabase data or use demo
   const props = useMemo(() => {
@@ -68,7 +71,7 @@ function AppInner() {
   const isAdmin = user?.role === "ADMIN" || user?.role === "admin";
   const isManager = user?.role === "MANAGER" || user?.role === "manager";
   const overdueCount = props.reduce((a,p) => a + p.overdue.length, 0);
-  const arrearsCount = props.reduce((a,p) => a + p.overdue.length, 0);
+  const financesCount = props.reduce((a,p) => a + p.overdue.length, 0);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -108,9 +111,10 @@ function AppInner() {
     return props.filter(p => p.id === user.property_id);
   }, [props, user, isAdmin]);
 
-  const navTo = (v) => { setView(v); setSelProp(null); setSidebarOpen(false); };
+  const navTo = (v) => { setView(v); setSelProp(null); setSidebarOpen(false); if (v !== "finances") setFinancesFilter("ALL"); };
   const handleSelect = (name) => { setSelProp(name); setView("property"); setSidebarOpen(false); };
   const handleBack = () => { setSelProp(null); setView("dashboard"); };
+  const handlePropertyCardClick = (propName) => { setFinancesFilter(propName); setView("finances"); setSidebarOpen(false); };
 
   const handleAddStudent = async (propName, roomId, student) => {
     if (isConfigured) {
@@ -229,9 +233,9 @@ function AppInner() {
                     <span style={{ position:"absolute", right:16, background:T.red, color:"#fff", borderRadius:10,
                       padding:"1px 6px", fontSize:9, fontWeight:700, minWidth:16, textAlign:"center" }}>{overdueCount}</span>
                   )}
-                  {n.id==="arrears" && arrearsCount > 0 && (
+                  {n.id==="finances" && financesCount > 0 && (
                     <span style={{ position:"absolute", right:16, background:T.red, color:"#fff", borderRadius:10,
-                      padding:"1px 6px", fontSize:9, fontWeight:700, minWidth:16, textAlign:"center" }}>{arrearsCount}</span>
+                      padding:"1px 6px", fontSize:9, fontWeight:700, minWidth:16, textAlign:"center" }}>{financesCount}</span>
                   )}
                 </button>
               );
@@ -271,7 +275,9 @@ function AppInner() {
           {view === "dashboard" && <Dashboard props={visibleProps} onSelect={handleSelect}
             onAddStudent={()=>{if(isAdmin){setAddStudentProp("");setShowAddStudent(true);}}}
             onRecordPayment={()=>{setPaymentProp(null);setShowPayment(true);}}
-            onExport={handleExportCSV} />}
+            onExport={handleExportCSV}
+            onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}}
+            onPropertyCardClick={handlePropertyCardClick} />}
           {view === "property" && selProp && <PropertyDetail name={selProp} props={visibleProps} onBack={handleBack}
             onOpenPay={()=>{setPaymentProp(activePropObj);setShowPayment(true);}}
             onAddStudent={()=>{if(isAdmin){setAddStudentProp(selProp);setShowAddStudent(true);}}}
@@ -281,9 +287,13 @@ function AppInner() {
             onRemoveRoom={handleRemoveRoom}
             isAdmin={isAdmin} />}
           {view === "students" && <Students props={visibleProps}
-            onAddStudent={()=>{if(isAdmin){setAddStudentProp("");setShowAddStudent(true);}}} />}
-          {view === "arrears" && <Arrears props={visibleProps}
+            onAddStudent={()=>{if(isAdmin){setAddStudentProp("");setShowAddStudent(true);}}}
             onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}} />}
+          {view === "finances" && <Finances props={visibleProps}
+            onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}}
+            initialPropFilter={financesFilter} />}
+          {/* {view === "calendar" && <Calendar props={visibleProps}
+            onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}} />} */}
           {view === "reports" && <Reports props={visibleProps} dataFlags={dataFlags} isAdmin={isAdmin}
             onSaveSnapshot={async ()=>{
               const d = new Date(); const month = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
@@ -310,7 +320,7 @@ function AppInner() {
       {profileStudent && <StudentProfile student={profileStudent} room={profileRoom} propName={profilePropName}
         onClose={()=>setProfileStudent(null)}
         onRecordPay={()=>{setPaymentProp(visibleProps.find(p=>p.name===profilePropName));setShowPayment(true);setProfileStudent(null);}}
-        onRemove={handleRemoveStudent} isAdmin={isAdmin} />}
+        onRemove={handleRemoveStudent} isAdmin={isAdmin} user={user} />}
 
       {/* Report download modal */}
       {showReportModal && <ReportDownloadModal props={visibleProps} user={user}

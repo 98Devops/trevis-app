@@ -79,17 +79,17 @@ select option { background:#131720; }
   .pn-chart-mobile { display:flex !important; }
 
   /* Modals full-width */
-  .pn-modal-inner { width:95vw !important; max-width:95vw !important; max-height:90vh !important; margin:5vh auto !important; }
+  .pn-modal-inner { width:95vw !important; max-width:95vw !important; max-height:90vh !important; margin:5vh auto !important; overflow-y:auto !important; }
   .pn-profile-panel { width:100vw !important; }
 
   /* Header row stacks */
   .pn-header-row { flex-direction:column !important; gap:12px !important; align-items:flex-start !important; }
   .pn-header-actions { width:100% !important; flex-wrap:wrap !important; display:grid !important; grid-template-columns:1fr 1fr !important; gap:8px !important; }
-  .pn-header-actions button { width:100% !important; }
+  .pn-header-actions button { width:100% !important; font-size:11px !important; padding:8px 12px !important; }
 
   /* Quick actions wrap */
   .pn-quick-actions { flex-wrap:wrap !important; }
-  .pn-quick-actions button { flex:1 !important; min-width:100px !important; }
+  .pn-quick-actions button { flex:1 !important; min-width:120px !important; font-size:12px !important; }
 
   /* Report tabs: horizontal scroll strip */
   .pn-report-tabs {
@@ -116,9 +116,9 @@ select option { background:#131720; }
   .pn-export-btn { width:100% !important; }
 
   /* Room row grid simplify */
-  .pn-room-row { grid-template-columns:1fr auto auto !important; gap:8px !important; }
+  .pn-room-row { grid-template-columns:1fr auto !important; gap:8px !important; }
   .pn-room-detail { display:none !important; }
-  .pn-room-students { grid-template-columns:1fr !important; }
+  .pn-room-students { grid-template-columns:1fr !important; gap:8px !important; }
 
   /* Arrears bucket cards stack */
   .pn-arrears-buckets { flex-direction:column !important; }
@@ -140,6 +140,14 @@ select option { background:#131720; }
   /* Financial ledger cards */
   .pn-ledger-table { display:none !important; }
   .pn-ledger-cards { display:flex !important; flex-direction:column !important; gap:8px !important; }
+
+  /* Sidebar label visibility */
+  .pn-label { display:inline !important; }
+
+  /* Calendar mobile */
+  .pn-calendar-desktop { display:none !important; }
+  .pn-calendar-mobile { display:flex !important; }
+  .pn-day-panel-inner { width:90% !important; max-width:400px !important; padding:20px !important; }
 }
 
 /* ── MOBILE: 480px ── */
@@ -148,6 +156,8 @@ select option { background:#131720; }
   .pn-main { padding:12px 10px !important; padding-top:56px !important; }
   .pn-stat-value { font-size:20px !important; }
   .pn-header-actions { grid-template-columns:1fr !important; }
+  .pn-quick-actions button { min-width:100% !important; }
+  .pn-modal-inner { padding:20px !important; }
 }
 `;
 
@@ -302,3 +312,32 @@ export const Btn = ({ children, onClick, accent, disabled, style:s={} }) => (
     {children}
   </button>
 );
+
+
+/* ═══════════════════════════════════════════════════════════
+   DATE INTELLIGENCE UTILITIES
+═══════════════════════════════════════════════════════════ */
+export function daysSince(dateString) {
+  if (!dateString) return null;
+  const diff = new Date() - new Date(dateString);
+  return Math.floor(diff / (1000 * 60 * 60 * 24));
+}
+
+export function daysColor(days) {
+  if (days === null) return '#6B7280';
+  if (days <= 30) return '#22C55E';
+  if (days <= 60) return '#F59E0B';
+  return '#EF4444';
+}
+
+export function formatMonth(dateString) {
+  return new Date(dateString).toLocaleDateString('en-GB', {
+    month: 'long', year: 'numeric'
+  });
+}
+
+export function formatDateLong(date) {
+  return new Date(date).toLocaleDateString('en-GB', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+}

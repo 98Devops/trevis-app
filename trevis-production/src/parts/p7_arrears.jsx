@@ -2,23 +2,25 @@ import { useState, useMemo } from "react";
 import { T, font, fmt, Badge, Bar, Btn } from "./p2_helpers.jsx";
 
 /* ═══════════════════════════════════════════════════════════
-   ARREARS MANAGEMENT VIEW
-   Internal staff view — shows all students with outstanding balances
+   FINANCIAL MANAGEMENT - Complete Financial Hub
+   Shows: Due, Paid, Balance, Rate + Payment Recording & Reconciliation
 ═══════════════════════════════════════════════════════════ */
-export function Arrears({ props, onStudentClick }) {
+export function Finances({ props, onStudentClick, onRecordPayment, user, initialPropFilter }) {
   const [filter, setFilter] = useState("ALL");
   const [sortCol, setSortCol] = useState("balance");
   const [sortDir, setSortDir] = useState(-1);
   const [selected, setSelected] = useState(new Set());
-  const [propFilter, setPropFilter] = useState("ALL");
+  const [propFilter, setPropFilter] = useState(initialPropFilter || "ALL");
+  const [viewMode, setViewMode] = useState("students"); // students | rooms | properties
+  const [editingPayment, setEditingPayment] = useState(null);
 
-  // Build arrears list from all properties
-  const allArrears = useMemo(() => {
+  // Build financial records from all properties
+  const allRecords = useMemo(() => {
     const now = new Date();
     return props.flatMap(p =>
       p.rooms.flatMap(r =>
         r.students
-          .filter(s => s.status !== "VACANT" && s.status !== "VACATED" && s.status !== "PAID")
+          .filter(s => s.status !== "VACANT" && s.status !== "VACATED")
           .map(s => {
             const balance = r.rent - s.paid;
             const lastPayDate = s.payHistory && s.payHistory.length > 0
@@ -28,28 +30,26 @@ export function Arrears({ props, onStudentClick }) {
               : s.date ? Math.floor((now - new Date(s.date)) / (1000*60*60*24)) : 999;
             return {
               ...s, property: p.name, propertyColor: (T.prop[p.name]||{accent:T.gold}).accent,
-              room: r.no, rent: r.rent, balance, lastPayDate,
-              daysSince, notes: s.notes || ""
+              room: r.no, roomId: r.id, rent: r.rent, balance, lastPayDate,
+              daysSince, notes: s.notes || "", status: balance > 0 ? (s.paid > 0 ? "PARTIAL" : "OVERDUE") : "PAID"
             };
           })
       )
-    ).filter(s => s.balance > 0);
+    );
   }, [props]);
 
   // Aging buckets
   const buckets = useMemo(() => ({
-    "0-30": allArrears.filter(s => s.daysSince <= 30),
-    "31-60": allArrears.filter(s => s.daysSince > 30 && s.daysSince <= 60),
-    "60+": allArrears.filter(s => s.daysSince > 60),
-  }), [allArrears]);
+    "ALL": allRecords,
+    "0-30": allRecords.filter(s => s.daysSince <= 30 && s.balance > 0),
+    "31-60": allRecords.filter(s => s.daysSince > 30 && s.daysSince <= 60 && s.balance > 0),
+    "60+": allRecords.filter(s => s.daysSince > 60 && s.balance > 0),
+  }), [allRecords]);
 
   // Filter + sort
   const filtered = useMemo(() => {
-    let list = allArrears;
+    let list = buckets[filter] || allRecords;
     if (propFilter !== "ALL") list = list.filter(s => s.property === propFilter);
-    if (filter === "0-30") list = list.filter(s => s.daysSince <= 30);
-    else if (filter === "31-60") list = list.filter(s => s.daysSince > 30 && s.daysSince <= 60);
-    else if (filter === "60+") list = list.filter(s => s.daysSince > 60);
     return [...list].sort((a, b) => {
       if (sortCol === "name") return sortDir * a.name.localeCompare(b.name);
       if (sortCol === "property") return sortDir * a.property.localeCompare(b.property);
@@ -57,11 +57,14 @@ export function Arrears({ props, onStudentClick }) {
       if (sortCol === "days") return sortDir * (a.daysSince - b.daysSince);
       return 0;
     });
-  }, [allArrears, filter, sortCol, sortDir, propFilter]);
+  }, [allRecords, filter, sortCol, sortDir, propFilter, buckets]);
 
-  const totalArrears = allArrears.reduce((a, s) => a + s.balance, 0);
-  const avgDays = allArrears.length > 0
-    ? Math.round(allArrears.reduce((a, s) => a + Math.min(s.daysSince, 365), 0) / allArrears.length) : 0;
+  const totalArrears = allRecords.filter(s=>s.balance>0).reduce((a, s) => a + s.balance, 0);
+  const totalDue = allRecords.reduce((a, s) => a + s.rent, 0);
+  const totalPaid = allRecords.reduce((a, s) => a + s.paid, 0);
+  const collectionRate = totalDue > 0 ? ((totalPaid / totalDue) * 100).toFixed(1) : "0";
+  const avgDays = allRecords.filter(s=>s.balance>0).length > 0
+    ? Math.round(allRecords.filter(s=>s.balance>0).reduce((a, s) => a + Math.min(s.daysSince, 365), 0) / allRecords.filter(s=>s.balance>0).length) : 0;
 
   const toggleSort = (col) => { if (sortCol === col) setSortDir(d => -d); else { setSortCol(col); setSortDir(-1); } };
   const toggleSelect = (id) => {
@@ -79,29 +82,35 @@ export function Arrears({ props, onStudentClick }) {
     <div>
       <div style={{ marginBottom: 24 }}>
         <h2 style={{ fontSize: 13, color: T.gold, textTransform: "uppercase", letterSpacing: "0.15em", fontWeight: 600, marginBottom: 4 }}>{monthLabel}</h2>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: T.text, margin: 0 }}>Arrears Management</h1>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: T.text, margin: 0 }}>Financial Management</h1>
       </div>
 
       {/* Summary strip */}
-      <div className="pn-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 20 }}>
+      <div className="pn-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 20 }}>
         <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px" }}>
-          <div style={{ fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Total Arrears</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: T.red, fontFamily: "'IBM Plex Mono',monospace" }}>{fmt(totalArrears)}</div>
+          <div style={{ fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Students</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: T.blue, fontFamily: "'IBM Plex Mono',monospace" }}>{allRecords.length}</div>
+          <div style={{ fontSize: 11, color: T.subtle, marginTop: 4 }}>{allRecords.filter(s=>s.balance>0).length} in arrears</div>
         </div>
         <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px" }}>
-          <div style={{ fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Students in Arrears</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: T.amber }}>{allArrears.length}</div>
+          <div style={{ fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Due</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: T.text, fontFamily: "'IBM Plex Mono',monospace" }}>{fmt(totalDue)}</div>
         </div>
         <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px" }}>
-          <div style={{ fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Avg Days Overdue</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: T.amber }}>{avgDays}</div>
+          <div style={{ fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Paid</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: T.green, fontFamily: "'IBM Plex Mono',monospace" }}>{fmt(totalPaid)}</div>
+        </div>
+        <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px" }}>
+          <div style={{ fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Balance</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: totalArrears>0?T.red:T.green, fontFamily: "'IBM Plex Mono',monospace" }}>{fmt(totalArrears)}</div>
+          <div style={{ fontSize: 11, color: T.gold, marginTop: 4 }}>{collectionRate}% rate</div>
         </div>
       </div>
 
-      {/* Aging buckets */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+      {/* Aging buckets + filters */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         {[
-          { key: "ALL", label: "All", count: allArrears.length, color: T.muted },
+          { key: "ALL", label: "All", count: allRecords.length, color: T.muted },
           { key: "0-30", label: "0–30 days", count: buckets["0-30"].length, color: T.amber, amount: buckets["0-30"].reduce((a,s)=>a+s.balance,0) },
           { key: "31-60", label: "31–60 days", count: buckets["31-60"].length, color: "#F97316", amount: buckets["31-60"].reduce((a,s)=>a+s.balance,0) },
           { key: "60+", label: "60+ days", count: buckets["60+"].length, color: T.red, amount: buckets["60+"].reduce((a,s)=>a+s.balance,0) },
@@ -124,7 +133,7 @@ export function Arrears({ props, onStudentClick }) {
         </select>
       </div>
 
-      {/* Arrears table — desktop */}
+      {/* Financial records table */}
       <div className="pn-attn-table" style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
         <div style={{ display: "grid", gridTemplateColumns: "30px 2fr 1fr 0.8fr 1fr 1fr 1fr 0.8fr 1fr", gap: 8, padding: "10px 20px",
           background: T.surface, borderBottom: `1px solid ${T.border}` }}>
@@ -139,7 +148,7 @@ export function Arrears({ props, onStudentClick }) {
         </div>
         <div style={{ maxHeight: 440, overflowY: "auto" }}>
           {filtered.length === 0 ? (
-            <div style={{ padding: 32, textAlign: "center", color: T.muted, fontSize: 13 }}>🎉 No outstanding arrears!</div>
+            <div style={{ padding: 32, textAlign: "center", color: T.muted, fontSize: 13 }}>🎉 No records match your filters!</div>
           ) : filtered.map(s => (
             <div key={s.id} style={{ display: "grid", gridTemplateColumns: "30px 2fr 1fr 0.8fr 1fr 1fr 1fr 0.8fr 1fr", gap: 8,
               padding: "12px 20px", borderBottom: `1px solid ${T.border}20`, alignItems: "center", transition: "background .15s",
@@ -157,8 +166,8 @@ export function Arrears({ props, onStudentClick }) {
               </div>
               <div style={{ fontSize: 12, color: T.muted }}>{s.room}</div>
               <div style={{ fontSize: 12, color: T.subtle, fontFamily: "'IBM Plex Mono',monospace" }}>{fmt(s.rent)}</div>
-              <div style={{ fontSize: 12, color: T.amber, fontFamily: "'IBM Plex Mono',monospace" }}>{fmt(s.paid)}</div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: T.red, fontFamily: "'IBM Plex Mono',monospace" }}>{fmt(s.balance)}</div>
+              <div style={{ fontSize: 12, color: s.paid>=s.rent?T.green:T.amber, fontFamily: "'IBM Plex Mono',monospace" }}>{fmt(s.paid)}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: s.balance>0?T.red:T.green, fontFamily: "'IBM Plex Mono',monospace" }}>{fmt(s.balance)}</div>
               <div style={{ fontSize: 11, color: s.daysSince > 60 ? T.red : s.daysSince > 30 ? "#F97316" : T.amber, fontWeight: 600 }}>{s.daysSince}d</div>
               <Badge status={s.status} />
             </div>
@@ -166,15 +175,33 @@ export function Arrears({ props, onStudentClick }) {
         </div>
         {/* Bulk actions */}
         {selected.size > 0 && (
-          <div style={{ padding: "12px 20px", background: T.surface, borderTop: `1px solid ${T.border}`, display: "flex", gap: 10, alignItems: "center" }}>
+          <div style={{ padding: "12px 20px", background: T.surface, borderTop: `1px solid ${T.border}`, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <span style={{ fontSize: 12, color: T.muted }}>{selected.size} selected</span>
             <Btn accent={T.green} style={{ padding: "6px 14px", fontSize: 11 }}
-              onClick={() => { alert(`Mark ${selected.size} as resolved — implement with Supabase update`); setSelected(new Set()); }}>
-              Mark Resolved
+              onClick={() => { 
+                alert(`Record bulk payment for ${selected.size} students`); 
+                setSelected(new Set()); 
+              }}>
+              💰 Record Payment
             </Btn>
             <Btn accent={T.amber} style={{ padding: "6px 14px", fontSize: 11 }}
-              onClick={() => { alert(`Flag ${selected.size} for follow-up`); setSelected(new Set()); }}>
-              Flag for Follow-up
+              onClick={() => { 
+                alert(`Send WhatsApp reminders to ${selected.size} students`); 
+                setSelected(new Set()); 
+              }}>
+              📱 Send Reminder
+            </Btn>
+            <Btn accent={T.blue} style={{ padding: "6px 14px", fontSize: 11 }}
+              onClick={() => { 
+                const selectedStudents = filtered.filter(s => selected.has(s.id));
+                let csv = "Name,Property,Room,Rent,Paid,Balance,Days,Status\n";
+                selectedStudents.forEach(s => csv += `"${s.name}",${s.property},${s.room},${s.rent},${s.paid},${s.balance},${s.daysSince},${s.status}\n`);
+                const blob = new Blob([csv], { type:"text/csv" });
+                const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+                a.download = `Financial_Export_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+                setSelected(new Set()); 
+              }}>
+              ↓ Export Selected
             </Btn>
           </div>
         )}
@@ -204,3 +231,4 @@ export function Arrears({ props, onStudentClick }) {
     </div>
   );
 }
+
