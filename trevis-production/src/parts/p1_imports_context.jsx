@@ -27,7 +27,8 @@ export function AuthProvider({ children }) {
         
         const ALLOWED_EMAILS = [
           "tfrsuperfx@gmail.com",
-          "tafiejr6@gmail.com"
+          "tafiejr6@gmail.com",
+          "trevisdaradi@gmail.com"
         ];
         
         const { data: { session } } = await supabase.auth.getSession();
@@ -148,6 +149,12 @@ export function DataProvider({ children }) {
 }
 
 export { isConfigured, signIn, signOut, getProperties, addRoomSvc, addStudentSvc, removeStudentSvc, recordPaymentSvc, getPaymentsByStudent, getDataFlags };
+
+// Export removeRoom from propertyService
+export { removeRoom } from "../services/propertyService";
+
+// Export payment edit/delete functions
+export { updatePayment, deletePayment } from "../services/paymentService";
 
 /* ═══════════════════════════════════════════════════════════
    ADDITIONAL SERVICE FUNCTIONS (Sprint 3)

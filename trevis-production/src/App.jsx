@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { AuthProvider, useAuth, DataProvider, useData, isConfigured, addRoomSvc, addStudentSvc, removeStudentSvc, recordPaymentSvc, getPaymentsByStudent, getDataFlags, saveMonthlySnapshot, getSnapshots, generateObligations, logReport, updateRoomNotes } from "./parts/p1_imports_context.jsx";
+import { AuthProvider, useAuth, DataProvider, useData, isConfigured, addRoomSvc, addStudentSvc, removeStudentSvc, recordPaymentSvc, getPaymentsByStudent, getDataFlags, saveMonthlySnapshot, getSnapshots, generateObligations, logReport, updateRoomNotes, removeRoom } from "./parts/p1_imports_context.jsx";
 import { T, font, globalCSS, fmt, buildProps } from "./parts/p2_helpers.jsx";
 import { LoginScreen, NotConfiguredScreen, AddStudentWizard, AddRoomModal, PaymentModal, StudentProfile } from "./parts/p3_modals.jsx";
 import { Dashboard } from "./parts/p4_dashboard.jsx";
@@ -144,6 +144,18 @@ function AppInner() {
     }
   };
 
+  const handleRemoveRoom = async (roomId) => {
+    if (isConfigured) {
+      const { data, error } = await removeRoom(roomId, user?.id);
+      if (error) {
+        showToast(error.message, 'error');
+      } else {
+        showToast('Room removed successfully');
+        refresh();
+      }
+    }
+  };
+
   const handleExportCSV = () => { setShowReportModal(true); };
 
   // Per-property CSV export
@@ -266,6 +278,7 @@ function AppInner() {
             onAddRoom={()=>{if(isAdmin&&activePropObj){setAddRoomPropId(activePropObj.id);setAddRoomPropName(activePropObj.name);setShowAddRoom(true);}}}
             onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}}
             onExport={handlePropertyExport}
+            onRemoveRoom={handleRemoveRoom}
             isAdmin={isAdmin} />}
           {view === "students" && <Students props={visibleProps}
             onAddStudent={()=>{if(isAdmin){setAddStudentProp("");setShowAddStudent(true);}}} />}

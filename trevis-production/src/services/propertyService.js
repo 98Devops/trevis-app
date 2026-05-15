@@ -21,6 +21,16 @@ export async function getProperties() {
       )
     `)
     .order('name');
+  
+  // Filter out inactive rooms in the application layer (until schema migration is run)
+  if (data) {
+    data.forEach(property => {
+      if (property.rooms) {
+        property.rooms = property.rooms.filter(room => room.is_active !== false);
+      }
+    });
+  }
+  
   return { data: data || [], error };
 }
 
@@ -31,6 +41,12 @@ export async function getPropertyById(id) {
     .select(`*, rooms(*, students(id, full_name, status, check_in_date, check_out_date, notes, data_flags, phone, national_id, emergency_contact_name, emergency_contact_phone, payment_plan))`)
     .eq('id', id)
     .single();
+  
+  // Filter out inactive rooms in the application layer (until schema migration is run)
+  if (data && data.rooms) {
+    data.rooms = data.rooms.filter(room => room.is_active !== false);
+  }
+  
   return { data, error };
 }
 
@@ -61,5 +77,35 @@ export async function deleteRoom(roomId) {
     .from('rooms')
     .delete()
     .eq('id', roomId);
+  return { data, error };
+}
+
+export async function removeRoom(roomId, userId) {
+  if (!isConfigured) return { data: null, error: { message: 'Not configured' } };
+  
+  // Check for active students
+  const { data: students, error: studentsError } = await supabase
+    .from('students')
+    .select('id')
+    .eq('room_id', roomId)
+    .eq('status', 'ACTIVE');
+  
+  if (studentsError) return { data: null, error: studentsError };
+  
+  if (students && students.length > 0) {
+    return { 
+      data: null, 
+      error: { message: `Cannot remove room — ${students.length} active student${students.length > 1 ? 's' : ''} assigned. Remove or relocate students first.` }
+    };
+  }
+  
+  // Soft delete: set is_active = false
+  const { data, error } = await supabase
+    .from('rooms')
+    .update({ is_active: false, updated_at: new Date().toISOString() })
+    .eq('id', roomId)
+    .select()
+    .single();
+  
   return { data, error };
 }

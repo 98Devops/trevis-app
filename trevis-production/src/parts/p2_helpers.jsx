@@ -38,10 +38,16 @@ select option { background:#131720; }
   from { transform:translateX(100%); opacity:0; }
   to { transform:translateX(0); opacity:1; }
 }
+@keyframes slideUp {
+  from { transform:translateY(100%); opacity:0; }
+  to { transform:translateY(0); opacity:1; }
+}
 @keyframes fadeIn {
   from { opacity:0; transform:translateY(8px); }
   to { opacity:1; transform:translateY(0); }
 }
+
+/* ── MOBILE: 768px ── */
 @media (max-width:768px) {
   .pn-sidebar {
     position:fixed !important; left:0 !important; top:0 !important; bottom:0 !important;
@@ -56,31 +62,92 @@ select option { background:#131720; }
   .pn-sidebar-overlay.pn-sidebar-open { opacity:1; pointer-events:auto; }
   .pn-hamburger { display:flex !important; }
   .pn-main { padding:16px 14px !important; padding-top:60px !important; }
+  .pn-shortcuts { display:none !important; }
+
+  /* KPI grid → 2x2 */
   .pn-kpi-grid { grid-template-columns:1fr 1fr !important; gap:10px !important; }
+
+  /* Property cards → single col */
   .pn-prop-grid { grid-template-columns:1fr !important; gap:12px !important; }
+
+  /* Attention tables → cards */
   .pn-attn-table { display:none !important; }
   .pn-attn-cards { display:flex !important; }
-  .pn-table-scroll { overflow-x:auto !important; -webkit-overflow-scrolling:touch !important; }
+
+  /* Chart: desktop hidden, mobile shown */
   .pn-chart-desktop { display:none !important; }
   .pn-chart-mobile { display:flex !important; }
-  .pn-chart-labels { font-size:8px !important; }
+
+  /* Modals full-width */
   .pn-modal-inner { width:95vw !important; max-width:95vw !important; max-height:90vh !important; margin:5vh auto !important; }
   .pn-profile-panel { width:100vw !important; }
+
+  /* Header row stacks */
   .pn-header-row { flex-direction:column !important; gap:12px !important; align-items:flex-start !important; }
-  .pn-header-actions { width:100% !important; flex-wrap:wrap !important; }
+  .pn-header-actions { width:100% !important; flex-wrap:wrap !important; display:grid !important; grid-template-columns:1fr 1fr !important; gap:8px !important; }
+  .pn-header-actions button { width:100% !important; }
+
+  /* Quick actions wrap */
   .pn-quick-actions { flex-wrap:wrap !important; }
   .pn-quick-actions button { flex:1 !important; min-width:100px !important; }
-  .pn-report-tabs { overflow-x:auto !important; -webkit-overflow-scrolling:touch !important; flex-wrap:nowrap !important; scrollbar-width:none !important; }
+
+  /* Report tabs: horizontal scroll strip */
+  .pn-report-tabs {
+    overflow-x:auto !important; -webkit-overflow-scrolling:touch !important;
+    flex-wrap:nowrap !important; scrollbar-width:none !important; width:100% !important;
+  }
   .pn-report-tabs::-webkit-scrollbar { display:none !important; }
   .pn-report-tabs button { flex-shrink:0 !important; white-space:nowrap !important; }
+
+  /* Report tables → cards */
   .pn-report-table { display:none !important; }
-  .pn-report-cards { display:flex !important; }
-  .pn-shortcuts { display:none !important; }
+  .pn-report-cards { display:flex !important; flex-direction:column !important; gap:8px !important; }
+  .pn-report-header { display:none !important; }
+
+  /* Students table → cards */
+  .pn-students-table { display:none !important; }
+  .pn-students-cards { display:flex !important; flex-direction:column !important; gap:8px !important; }
+
+  /* Admin action buttons stack full width */
+  .pn-admin-actions { flex-direction:column !important; }
+  .pn-admin-actions button { width:100% !important; }
+
+  /* Export button full width */
+  .pn-export-btn { width:100% !important; }
+
+  /* Room row grid simplify */
+  .pn-room-row { grid-template-columns:1fr auto auto !important; gap:8px !important; }
+  .pn-room-detail { display:none !important; }
+  .pn-room-students { grid-template-columns:1fr !important; }
+
+  /* Arrears bucket cards stack */
+  .pn-arrears-buckets { flex-direction:column !important; }
+  .pn-arrears-buckets button { width:100% !important; }
+
+  /* Calendar mobile */
+  .pn-calendar-grid { font-size:11px !important; }
+  .pn-calendar-cell { padding:4px 2px !important; min-height:36px !important; }
+  .pn-day-panel { position:fixed !important; bottom:0 !important; left:0 !important; right:0 !important;
+    top:auto !important; max-height:60vh !important; border-radius:16px 16px 0 0 !important;
+    animation:slideUp .3s ease !important; }
+
+  /* Settings panel full width on mobile */
+  .pn-settings-panel { width:100vw !important; }
+
+  /* Table scroll helper */
+  .pn-table-scroll { overflow-x:auto !important; -webkit-overflow-scrolling:touch !important; }
+
+  /* Financial ledger cards */
+  .pn-ledger-table { display:none !important; }
+  .pn-ledger-cards { display:flex !important; flex-direction:column !important; gap:8px !important; }
 }
+
+/* ── MOBILE: 480px ── */
 @media (max-width:480px) {
   .pn-kpi-grid { grid-template-columns:1fr !important; }
   .pn-main { padding:12px 10px !important; padding-top:56px !important; }
   .pn-stat-value { font-size:20px !important; }
+  .pn-header-actions { grid-template-columns:1fr !important; }
 }
 `;
 

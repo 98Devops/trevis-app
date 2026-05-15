@@ -47,7 +47,7 @@ export function Reports({ props, dataFlags, isAdmin, onResolveFlag, onSaveSnapsh
           <h2 style={{ fontSize:13,color:T.gold,textTransform:"uppercase",letterSpacing:"0.15em",fontWeight:600,marginBottom:4 }}>{monthLabel}</h2>
           <h1 style={{ fontSize:26,fontWeight:800,color:T.text,margin:0 }}>Reports</h1>
         </div>
-        <Btn accent={T.gold} style={{background:T.goldDim,color:T.gold,border:`1px solid ${T.gold}40`}} onClick={handleExport}>↓ Export CSV</Btn>
+        <Btn accent={T.gold} style={{background:T.goldDim,color:T.gold,border:`1px solid ${T.gold}40`}} onClick={handleExport}><span className="pn-export-btn">↓ Export CSV</span></Btn>
       </div>
 
       <div className="pn-report-tabs" style={{ display:"flex",gap:4,marginBottom:20,background:T.surface,borderRadius:10,padding:3,width:"fit-content",flexWrap:"wrap" }}>
@@ -61,15 +61,17 @@ export function Reports({ props, dataFlags, isAdmin, onResolveFlag, onSaveSnapsh
 
       {/* Admin actions */}
       {isAdmin && (
-        <div style={{ display:"flex",gap:10,marginBottom:16,flexWrap:"wrap" }}>
+        <div className="pn-admin-actions" style={{ display:"flex",gap:10,marginBottom:16,flexWrap:"wrap" }}>
           {onSaveSnapshot && <Btn accent={T.blue} onClick={onSaveSnapshot} style={{fontSize:11,padding:"7px 14px"}}>📸 Save Monthly Snapshot</Btn>}
           {onGenerateObligations && <Btn accent={T.amber} onClick={onGenerateObligations} style={{fontSize:11,padding:"7px 14px"}}>⚙ Generate Obligations</Btn>}
         </div>
       )}
 
       {tab === "income" && (
-        <div style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:16,overflow:"hidden" }}>
-          <div style={{ display:"grid",gridTemplateColumns:"1.5fr 1fr 1fr 1fr 1fr 1fr",padding:"12px 24px",background:T.surface,borderBottom:`1px solid ${T.border}` }}>
+        <>
+        {/* Desktop table */}
+        <div className="pn-report-table" style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:16,overflow:"hidden" }}>
+          <div className="pn-report-header" style={{ display:"grid",gridTemplateColumns:"1.5fr 1fr 1fr 1fr 1fr 1fr",padding:"12px 24px",background:T.surface,borderBottom:`1px solid ${T.border}` }}>
             {["Property","Students","Expected","Collected","Arrears","Rate"].map(h => (
               <div key={h} style={{ fontSize:10,color:T.muted,textTransform:"uppercase",letterSpacing:"0.1em",fontWeight:600 }}>{h}</div>
             ))}
@@ -104,11 +106,48 @@ export function Reports({ props, dataFlags, isAdmin, onResolveFlag, onSaveSnapsh
             <div style={{ fontSize:13,fontWeight:700,color:T.gold }}>{grand.expected>0?((grand.collected/grand.expected)*100).toFixed(1):"0"}%</div>
           </div>
         </div>
+        {/* Mobile cards */}
+        <div className="pn-report-cards" style={{ display:"none",flexDirection:"column",gap:8 }}>
+          {totals.map(t => {
+            const ac = T.prop[t.name] || { accent: T.gold };
+            const is100 = Number(t.rate) >= 100;
+            return (
+              <div key={t.name+"m"} style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:16,borderLeft:`3px solid ${ac.accent}` }}>
+                <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:10 }}>
+                  <div style={{ width:8,height:8,borderRadius:"50%",background:ac.accent }} />
+                  <span style={{ fontSize:14,fontWeight:700,color:T.text }}>{t.name}</span>
+                </div>
+                <div style={{ fontSize:12,color:T.subtle,marginBottom:6 }}>{t.students} students</div>
+                <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:12 }}>
+                  <div><span style={{color:T.muted}}>Expected: </span><span style={{color:T.subtle,fontFamily:"'IBM Plex Mono',monospace"}}>{fmt(t.expected)}</span></div>
+                  <div><span style={{color:T.muted}}>Collected: </span><span style={{color:T.green,fontFamily:"'IBM Plex Mono',monospace"}}>{fmt(t.collected)}{is100?" ✓":""}</span></div>
+                  <div><span style={{color:T.muted}}>Arrears: </span><span style={{color:t.arrears>0?T.red:T.green,fontFamily:"'IBM Plex Mono',monospace"}}>{fmt(t.arrears)}</span></div>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{color:T.muted}}>Rate: </span>
+                    <div style={{flex:1}}><Bar pct={Number(t.rate)} color={ac.accent} /></div>
+                    <span style={{fontSize:11,color:ac.accent,fontWeight:700}}>{t.rate}%</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          <div style={{ background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:14 }}>
+            <div style={{ fontSize:13,fontWeight:800,color:T.text,marginBottom:8 }}>TOTAL</div>
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:4,fontSize:12 }}>
+              <div><span style={{color:T.muted}}>Students: </span><span style={{color:T.text}}>{grand.students}</span></div>
+              <div><span style={{color:T.muted}}>Expected: </span><span style={{color:T.text,fontFamily:"'IBM Plex Mono',monospace"}}>{fmt(grand.expected)}</span></div>
+              <div><span style={{color:T.muted}}>Collected: </span><span style={{color:T.green,fontFamily:"'IBM Plex Mono',monospace"}}>{fmt(grand.collected)}</span></div>
+              <div><span style={{color:T.muted}}>Arrears: </span><span style={{color:grand.arrears>0?T.red:T.green,fontFamily:"'IBM Plex Mono',monospace"}}>{fmt(grand.arrears)}</span></div>
+            </div>
+          </div>
+        </div>
+        </>
       )}
 
       {tab === "outstanding" && (
-        <div style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:16,overflow:"hidden" }}>
-          <div style={{ display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr 1fr",padding:"12px 24px",background:T.surface,borderBottom:`1px solid ${T.border}` }}>
+        <>
+        <div className="pn-report-table" style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:16,overflow:"hidden" }}>
+          <div className="pn-report-header" style={{ display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr 1fr",padding:"12px 24px",background:T.surface,borderBottom:`1px solid ${T.border}` }}>
             {["Name","Property","Room","Rent","Paid","Balance"].map(h => (
               <div key={h} style={{ fontSize:10,color:T.muted,textTransform:"uppercase",letterSpacing:"0.1em",fontWeight:600 }}>{h}</div>
             ))}
@@ -128,11 +167,31 @@ export function Reports({ props, dataFlags, isAdmin, onResolveFlag, onSaveSnapsh
             </div>
           ))}
         </div>
+        <div className="pn-report-cards" style={{ display:"none",flexDirection:"column",gap:8 }}>
+          {allOutstanding.length===0 ? (
+            <div style={{ padding:24,textAlign:"center",color:T.muted,background:T.card,borderRadius:12 }}>🎉 No outstanding balances!</div>
+          ) : allOutstanding.map(s => {
+            const ac = T.prop[s.property] || { accent: T.gold };
+            return (
+              <div key={s.id+"m"} style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:14,borderLeft:`3px solid ${ac.accent}` }}>
+                <div style={{ fontSize:14,fontWeight:700,color:T.text,marginBottom:4 }}>{s.name}</div>
+                <div style={{ fontSize:11,color:T.subtle,marginBottom:8 }}>{s.property} · {s.room}</div>
+                <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,fontSize:12 }}>
+                  <div><span style={{color:T.muted}}>Rent: </span><span style={{color:T.subtle}}>{fmt(s.rent)}</span></div>
+                  <div><span style={{color:T.muted}}>Paid: </span><span style={{color:T.amber}}>{fmt(s.paid)}</span></div>
+                  <div><span style={{color:T.muted}}>Bal: </span><span style={{color:T.red,fontWeight:700}}>{fmt(s.balance)}</span></div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        </>
       )}
 
       {tab === "occupancy" && (
-        <div style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:16,overflow:"hidden" }}>
-          <div style={{ display:"grid",gridTemplateColumns:"1.5fr 1fr 1fr 1fr 1fr",padding:"12px 24px",background:T.surface,borderBottom:`1px solid ${T.border}` }}>
+        <>
+        <div className="pn-report-table" style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:16,overflow:"hidden" }}>
+          <div className="pn-report-header" style={{ display:"grid",gridTemplateColumns:"1.5fr 1fr 1fr 1fr 1fr",padding:"12px 24px",background:T.surface,borderBottom:`1px solid ${T.border}` }}>
             {["Property","Total Beds","Occupied","Vacant","Occupancy"].map(h => (
               <div key={h} style={{ fontSize:10,color:T.muted,textTransform:"uppercase",letterSpacing:"0.1em",fontWeight:600 }}>{h}</div>
             ))}
@@ -164,6 +223,29 @@ export function Reports({ props, dataFlags, isAdmin, onResolveFlag, onSaveSnapsh
             <div style={{ fontSize:13,fontWeight:700,color:T.gold }}>{grand.totalBeds>0?((grand.totalBeds-grand.vacantBeds)/grand.totalBeds*100).toFixed(1):"0"}%</div>
           </div>
         </div>
+        <div className="pn-report-cards" style={{ display:"none",flexDirection:"column",gap:8 }}>
+          {totals.map(t => {
+            const ac = T.prop[t.name] || { accent: T.gold }; const occ = t.totalBeds-t.vacantBeds; const occRate = t.totalBeds>0?((occ/t.totalBeds)*100).toFixed(1):"0";
+            return (
+              <div key={t.name+"m"} style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:14,borderLeft:`3px solid ${ac.accent}` }}>
+                <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:8 }}>
+                  <div style={{ width:8,height:8,borderRadius:"50%",background:ac.accent }} />
+                  <span style={{ fontSize:14,fontWeight:700,color:T.text }}>{t.name}</span>
+                </div>
+                <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:12 }}>
+                  <div><span style={{color:T.muted}}>Beds: </span><span style={{color:T.subtle}}>{t.totalBeds}</span></div>
+                  <div><span style={{color:T.muted}}>Occupied: </span><span style={{color:T.green}}>{occ}</span></div>
+                  <div><span style={{color:T.muted}}>Vacant: </span><span style={{color:t.vacantBeds>0?T.amber:T.green}}>{t.vacantBeds}</span></div>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <div style={{flex:1}}><Bar pct={Number(occRate)} color={ac.accent} /></div>
+                    <span style={{fontSize:11,color:ac.accent,fontWeight:700}}>{occRate}%</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        </>
       )}
 
       {tab === "quality" && isAdmin && (

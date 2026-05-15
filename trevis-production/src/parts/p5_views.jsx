@@ -4,7 +4,7 @@ import { T, font, fmt, Badge, Stat, Bar, Btn } from "./p2_helpers.jsx";
 /* ═══════════════════════════════════════════════════════════
    PROPERTY DETAIL VIEW
 ═══════════════════════════════════════════════════════════ */
-export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, onAddRoom, onStudentClick, isAdmin, onExport }) {
+export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, onAddRoom, onStudentClick, isAdmin, onExport, onRemoveRoom }) {
   const prop = props.find(p => p.name === name);
   const ac = T.prop[name] || { accent: T.gold };
   const [search, setSearch] = useState("");
@@ -43,47 +43,76 @@ export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, o
       </div>
       {filtered.length === 0 && <div style={{ padding:32,textAlign:"center",color:T.muted,fontSize:13 }}>No rooms match your search</div>}
       <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-        {filtered.map(room => <RoomRow key={room.id} room={room} ac={ac} propName={name} onStudentClick={onStudentClick} />)}
+        {filtered.map(room => <RoomRow key={room.id} room={room} ac={ac} propName={name} onStudentClick={onStudentClick} isAdmin={isAdmin} onRemoveRoom={onRemoveRoom} />)}
       </div>
     </div>
   );
 }
 
-function RoomRow({ room, ac, propName, onStudentClick }) {
+function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom }) {
   const [open, setOpen] = useState(false);
   const real = room.students.filter(s=>s.status!=="VACANT"&&s.status!=="VACATED");
   const paid = real.filter(s=>s.status==="PAID").length;
   const issues = real.filter(s=>s.status!=="PAID").length;
   const pct = real.length > 0 ? Math.round((paid/real.length)*100) : 0;
   const vacant = room.beds - real.length;
+  
+  const expected = room.beds * room.rent;
+  const collected = real.reduce((sum, s) => sum + (s.paid || 0), 0);
+  const outstanding = expected - collected;
+
+  const handleRemove = () => {
+    if (real.length > 0) {
+      alert(`Cannot remove ${room.no} — ${real.length} active students assigned. Remove or relocate students first.`);
+      return;
+    }
+    if (window.confirm(`Remove ${room.no}? This will soft-delete the room.`)) {
+      if (onRemoveRoom) onRemoveRoom(room.id);
+    }
+  };
+
   return (
     <div style={{ background:T.card,border:`1px solid ${open?ac.accent+"60":T.border}`,borderRadius:12,overflow:"hidden",transition:"border .2s" }}>
-      <div onClick={()=>setOpen(o=>!o)} style={{ padding:"14px 20px",cursor:"pointer",display:"grid",
+      <div onClick={()=>setOpen(o=>!o)} className="pn-room-row" style={{ padding:"14px 20px",cursor:"pointer",display:"grid",
         gridTemplateColumns:"1fr auto auto auto auto auto",gap:12,alignItems:"center" }}>
         <div>
-          <span style={{ fontSize:14,fontWeight:700,color:T.text }}>{room.no}</span>
-          <span style={{ fontSize:11,color:T.muted,marginLeft:10 }}>{real.length}/{room.beds} beds · ${room.rent}/bed</span>
+          <div style={{ fontSize:14,fontWeight:700,color:T.text }}>{room.no}</div>
+          <div style={{ fontSize:11,color:T.muted,marginTop:2 }}>{room.beds} beds · ${room.rent}/bed · ${expected}/mo</div>
         </div>
-        <div style={{ fontSize:11,color:T.green }}>{paid} paid</div>
-        {issues>0 && <div style={{ background:T.redDim,color:T.red,padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:700 }}>{issues} ⚠</div>}
-        {vacant>0 && <div style={{ background:T.amberDim,color:T.amber,padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:700 }}>{vacant} vacant</div>}
-        <div style={{ width:80 }}><Bar pct={pct} color={ac.accent} /></div>
+        <div className="pn-room-detail" style={{ fontSize:11,color:T.green }}>{paid} paid</div>
+        {issues>0 && <div className="pn-room-detail" style={{ background:T.redDim,color:T.red,padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:700 }}>{issues} ⚠</div>}
+        {vacant>0 && <div className="pn-room-detail" style={{ background:T.amberDim,color:T.amber,padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:700 }}>{vacant} vacant</div>}
+        <div style={{ width:80, display:"flex", alignItems:"center", gap:6 }}>
+          <div style={{flex:1}}><Bar pct={pct} color={ac.accent} /></div>
+          <span style={{fontSize:10,fontWeight:700,color:ac.accent}}>{pct}%</span>
+        </div>
         <span style={{ color:T.muted,fontSize:13 }}>{open?"▲":"▼"}</span>
       </div>
       {open && (
-        <div style={{ borderTop:`1px solid ${T.border}` }}>
+        <div style={{ borderTop:`1px solid ${T.border}`, paddingBottom:12 }}>
           {room.students.map(s => (
             <div key={s.id} onClick={()=>s.status!=="VACANT"&&s.status!=="VACATED"&&onStudentClick&&onStudentClick(s,room,propName)}
+              className="pn-room-students"
               style={{ display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",gap:12,padding:"10px 20px",
                 borderBottom:`1px solid ${T.border}20`,alignItems:"center",cursor:s.status!=="VACANT"&&s.status!=="VACATED"?"pointer":"default",transition:"background .15s" }}
               onMouseEnter={e=>{if(s.status!=="VACANT"&&s.status!=="VACATED")e.currentTarget.style.background=T.hover}}
               onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
               <div style={{ fontSize:13,color:s.status==="VACANT"||s.status==="VACATED"?T.muted:T.text,fontWeight:s.status==="VACANT"?400:600,fontStyle:s.status==="VACANT"?"italic":"normal" }}>{s.name}</div>
-              <div style={{ fontSize:12,color:T.subtle,fontFamily:"'IBM Plex Mono',monospace" }}>{s.status==="VACANT"?"—":`$${s.paid} paid`}</div>
+              <div style={{ fontSize:12,color:T.subtle,fontFamily:"'IBM Plex Mono',monospace" }}>{s.status==="VACANT"?"—":`$${s.paid} paid${s.balance>0?` · $${s.balance} bal`:''}`}</div>
               <div style={{ fontSize:11,color:T.muted }}>{s.date||"—"}</div>
-              <Badge status={s.status} />
+              <div style={{ justifySelf: "end" }}><Badge status={s.status} /></div>
             </div>
           ))}
+          <div style={{ padding:"12px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", background:T.surface, borderTop:`1px solid ${T.border}40`, marginTop:4 }}>
+            <div style={{ fontSize:11, color:T.muted }}>
+              Room total: <span style={{color:T.text}}>${expected}</span> expected · <span style={{color:T.green}}>${collected}</span> collected · <span style={{color:outstanding>0?T.red:T.text}}>${outstanding}</span> outstanding.
+            </div>
+            {isAdmin && (
+              <button onClick={handleRemove} style={{ background:T.redDim, border:`1px solid ${T.red}40`, color:T.red, fontSize:10, fontWeight:700, padding:"4px 8px", borderRadius:6, cursor:"pointer" }}>
+                Remove Room
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -133,7 +162,8 @@ export function Students({ props, onAddStudent }) {
           </button>
         ))}
       </div>
-      <div style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden" }}>
+      <>
+      <div className="pn-students-table" style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden" }}>
         <div className="pn-table-scroll">
           <div style={{ display:"grid",gridTemplateColumns:"2fr 1.2fr 1fr 1fr 1fr 1fr",padding:"11px 20px",background:T.surface,borderBottom:`1px solid ${T.border}`,minWidth:600 }}>
             {["Name","Property","Room","Rent","Paid","Status"].map(h => (
@@ -164,6 +194,25 @@ export function Students({ props, onAddStudent }) {
           </div>
         </div>
       </div>
+      <div className="pn-students-cards" style={{ display:"none",flexDirection:"column",gap:8 }}>
+        {filtered.length===0 ? (
+          <div style={{ padding:24,textAlign:"center",color:T.muted,background:T.card,borderRadius:12 }}>No students match your search criteria</div>
+        ) : filtered.map(s => {
+          const ac = T.prop[s.property] || { accent: T.gold };
+          return (
+            <div key={s.id+"m"} style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:14,borderLeft:`3px solid ${ac.accent}` }}>
+              <div style={{ fontSize:14,fontWeight:700,color:T.text,marginBottom:4 }}>{s.name}</div>
+              <div style={{ fontSize:12,color:T.subtle,marginBottom:8 }}>{s.property} · {s.room}</div>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr auto",gap:6,alignItems:"center" }}>
+                <div><span style={{color:T.muted,fontSize:11}}>Rent: </span><span style={{color:T.subtle,fontSize:12,fontFamily:"'IBM Plex Mono',monospace"}}>{fmt(s.rent)}</span></div>
+                <div><span style={{color:T.muted,fontSize:11}}>Paid: </span><span style={{color:s.paid>=s.rent?T.green:T.amber,fontSize:12,fontFamily:"'IBM Plex Mono',monospace"}}>{fmt(s.paid)}</span></div>
+                <div style={{justifySelf:"end"}}><Badge status={s.status} /></div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      </>
     </div>
   );
 }

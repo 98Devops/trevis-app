@@ -64,30 +64,29 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
       <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:16, padding:24, marginBottom:20 }}>
         <div style={{ fontSize:14, fontWeight:700, color:T.text, marginBottom:20 }}>Collected vs Expected by Property</div>
         {/* Desktop: vertical grouped bars */}
-        <div className="pn-chart-desktop" style={{ display:"flex", gap:32, alignItems:"flex-end", height:220, padding:"0 8px" }}>
+        <div className="pn-chart-desktop" style={{ display:"flex", gap:32, alignItems:"flex-end", minHeight:240, padding:"0 8px" }}>
           {props.map(p => {
-            const ac = T.prop[p.name] || { accent: T.gold };
             const maxVal = Math.max(...props.map(x=>Math.max(x.expected,x.collected)), 1);
             const ePct = Math.max(2, (p.expected/maxVal)*100);
             const cPct = Math.max(2, (p.collected/maxVal)*100);
             const is100 = p.expected > 0 && p.collected >= p.expected;
             return (
-              <div key={p.name} style={{ flex:1, textAlign:"center", minWidth:0 }}>
-                <div style={{ display:"flex", gap:3, justifyContent:"center", alignItems:"flex-end", height:180 }}>
+              <div key={p.name} style={{ flex:1, textAlign:"center", minWidth:120 }}>
+                <div style={{ display:"flex", gap:6, justifyContent:"center", alignItems:"flex-end", height:180 }}>
                   {is100 ? (
-                    <div style={{ width:28, height:`${cPct}%`, background:ac.accent, borderRadius:"4px 4px 0 0", position:"relative" }}>
-                      <div style={{ position:"absolute",bottom:"100%",left:"50%",transform:"translateX(-50%)",whiteSpace:"nowrap",fontSize:10,fontWeight:700,color:ac.accent,paddingBottom:6 }}>
+                    <div style={{ width:32, height:`${Math.max(cPct, ePct)}%`, background:"#F59E0B", borderRadius:"4px 4px 0 0", position:"relative" }}>
+                      <div style={{ position:"absolute",bottom:"100%",left:"50%",transform:"translateX(-50%)",whiteSpace:"nowrap",fontSize:10,fontWeight:700,color:"#F59E0B",paddingBottom:10 }}>
                         ✓ {fmt(p.collected)}
                       </div>
                     </div>
                   ) : (<>
-                    <div style={{ width:18, height:`${ePct}%`, background:`${ac.accent}40`, borderRadius:"4px 4px 0 0", position:"relative" }}>
-                      <div style={{ position:"absolute",bottom:"100%",left:"50%",transform:"translateX(-50%)",whiteSpace:"nowrap",fontSize:9,color:T.muted,paddingBottom:6 }}>
+                    <div style={{ width:20, height:`${ePct}%`, background:"rgba(56, 189, 248, 0.7)", borderRadius:"4px 4px 0 0", position:"relative" }}>
+                      <div style={{ position:"absolute",bottom:"100%",left:0,whiteSpace:"nowrap",fontSize:10,color:"#38BDF8",paddingBottom:10 }}>
                         {fmt(p.expected)}
                       </div>
                     </div>
-                    <div style={{ width:18, height:`${cPct}%`, background:ac.accent, borderRadius:"4px 4px 0 0", position:"relative" }}>
-                      <div style={{ position:"absolute",bottom:"100%",left:"50%",transform:"translateX(-50%)",whiteSpace:"nowrap",fontSize:9,fontWeight:600,color:ac.accent,paddingBottom:6 }}>
+                    <div style={{ width:20, height:`${cPct}%`, background:"#F59E0B", borderRadius:"4px 4px 0 0", position:"relative" }}>
+                      <div style={{ position:"absolute",bottom:"100%",right:0,whiteSpace:"nowrap",fontSize:10,fontWeight:700,color:"#F59E0B",paddingBottom:10 }}>
                         {fmt(p.collected)}
                       </div>
                     </div>
@@ -101,7 +100,6 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
         {/* Mobile: horizontal bars */}
         <div className="pn-chart-mobile" style={{ display:"none", flexDirection:"column", gap:16 }}>
           {props.map(p => {
-            const ac = T.prop[p.name] || { accent: T.gold };
             const maxVal = Math.max(...props.map(x=>Math.max(x.expected,x.collected)), 1);
             const ePct = Math.max(3, (p.expected/maxVal)*100);
             const cPct = Math.max(3, (p.collected/maxVal)*100);
@@ -110,12 +108,12 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
                 <div style={{ fontSize:11, color:T.text, fontWeight:600, marginBottom:6 }}>{p.name}</div>
                 <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <div style={{ height:12, width:`${ePct}%`, background:`${ac.accent}40`, borderRadius:3, minWidth:20 }} />
-                    <span style={{ fontSize:10, color:T.muted, whiteSpace:"nowrap" }}>{fmt(p.expected)}</span>
+                    <div style={{ height:14, width:`${ePct}%`, background:"rgba(56, 189, 248, 0.7)", borderRadius:3, minWidth:20 }} />
+                    <span style={{ fontSize:10, color:"#38BDF8", whiteSpace:"nowrap" }}>{fmt(p.expected)}</span>
                   </div>
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <div style={{ height:12, width:`${cPct}%`, background:ac.accent, borderRadius:3, minWidth:20 }} />
-                    <span style={{ fontSize:10, color:ac.accent, fontWeight:600, whiteSpace:"nowrap" }}>{fmt(p.collected)}</span>
+                    <div style={{ height:14, width:`${cPct}%`, background:"#F59E0B", borderRadius:3, minWidth:20 }} />
+                    <span style={{ fontSize:10, color:"#F59E0B", fontWeight:600, whiteSpace:"nowrap" }}>{fmt(p.collected)}</span>
                   </div>
                 </div>
               </div>
@@ -123,8 +121,8 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
           })}
         </div>
         <div style={{ display:"flex",gap:20,justifyContent:"center",marginTop:16 }}>
-          <span style={{ display:"flex",alignItems:"center",gap:5,fontSize:10,color:T.muted }}><span style={{width:8,height:8,borderRadius:2,background:T.border,display:"inline-block"}} /> Expected</span>
-          <span style={{ display:"flex",alignItems:"center",gap:5,fontSize:10,color:T.green }}><span style={{width:8,height:8,borderRadius:2,background:T.green,display:"inline-block"}} /> Collected</span>
+          <span style={{ display:"flex",alignItems:"center",gap:5,fontSize:10,color:"#38BDF8" }}><span style={{width:10,height:10,borderRadius:2,background:"rgba(56, 189, 248, 0.7)",display:"inline-block"}} /> Expected</span>
+          <span style={{ display:"flex",alignItems:"center",gap:5,fontSize:10,color:"#F59E0B" }}><span style={{width:10,height:10,borderRadius:2,background:"#F59E0B",display:"inline-block"}} /> Collected</span>
         </div>
       </div>
 
