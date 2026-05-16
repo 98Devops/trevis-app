@@ -334,7 +334,7 @@ export function PaymentModal({ open, onClose, prop, onRecord, user, allProps }) 
 /* ═══════════════════════════════════════════════════════════
    STUDENT PROFILE PANEL (slide-in)
 ═══════════════════════════════════════════════════════════ */
-export function StudentProfile({ student, room, propName, onClose, onRecordPay, onRemove, isAdmin, user }) {
+export function StudentProfile({ student, room, propName, onClose, onRecordPay, onRemove, isAdmin, user, refresh }) {
   if (!student) return null;
   const ac = T.prop[propName] || { accent:T.gold };
   const balance = room.rent - student.paid;
@@ -378,14 +378,18 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
   };
 
   const handleDeletePayment = async (paymentId) => {
-    const { deletePayment } = await import('./p1_imports_context.jsx');
+    const { deletePayment, recalculateBalances } = await import('./p1_imports_context.jsx');
     const { error } = await deletePayment(paymentId);
     if (!error) {
+      // Recalculate all balances and statuses
+      await recalculateBalances();
       // Refresh payment history
       const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
       const { data } = await getPaymentsByStudent(student.id);
       setPaymentHistory(data || []);
       setConfirmDelete(null);
+      // Trigger full app refresh to recalculate everything
+      if (refresh) refresh();
     }
   };
 
@@ -515,12 +519,17 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
                     <EditPaymentInline 
                       payment={p} 
                       onSave={async (updated) => {
-                        const { updatePayment } = await import('./p1_imports_context.jsx');
+                        const { updatePayment, recalculateBalances } = await import('./p1_imports_context.jsx');
                         await updatePayment(p.id, updated, user?.email || 'system');
+                        // Recalculate all balances and statuses
+                        await recalculateBalances();
+                        // Refresh payment history
                         const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
                         const { data } = await getPaymentsByStudent(student.id);
                         setPaymentHistory(data || []);
                         setEditingPayment(null);
+                        // Trigger full app refresh to recalculate everything
+                        if (refresh) refresh();
                       }}
                       onCancel={() => setEditingPayment(null)}
                     />

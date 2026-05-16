@@ -175,7 +175,7 @@ BEGIN
       )
   LOOP
     INSERT INTO monthly_obligations (student_id, month, amount_due, amount_paid, status)
-    VALUES (stud.student_id, p_month, stud.amount_due, 0, 'PENDING');
+    VALUES (stud.student_id, p_month, stud.amount_due, 0, 'OVERDUE');
     cnt := cnt + 1;
   END LOOP;
   RETURN cnt;

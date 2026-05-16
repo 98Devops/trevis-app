@@ -139,6 +139,9 @@ function AppInner() {
         paymentMethod: payment.method, receiptNumber: payment.receipt,
         notes: payment.notes, recordedBy: user?.id
       });
+      // Recalculate balances after recording payment
+      const { recalculateBalances } = await import('./parts/p1_imports_context.jsx');
+      await recalculateBalances();
       refresh();
     }
   };
@@ -332,7 +335,7 @@ function AppInner() {
       {profileStudent && <StudentProfile student={profileStudent} room={profileRoom} propName={profilePropName}
         onClose={()=>setProfileStudent(null)}
         onRecordPay={()=>{setPaymentProp(visibleProps.find(p=>p.name===profilePropName));setShowPayment(true);setProfileStudent(null);}}
-        onRemove={handleRemoveStudent} isAdmin={isAdmin} user={user} />}
+        onRemove={handleRemoveStudent} isAdmin={isAdmin} user={user} refresh={refresh} />}
 
       {/* Report download modal */}
       {showReportModal && <ReportDownloadModal props={visibleProps} user={user}

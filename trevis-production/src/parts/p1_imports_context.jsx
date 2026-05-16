@@ -177,6 +177,12 @@ export async function generateObligations(monthDate) {
   return { data, error };
 }
 
+export async function recalculateBalances() {
+  if (!isConfigured) return { data: null, error: { message: 'Not configured' } };
+  const { data, error } = await supabase.rpc('recalculate_student_balances');
+  return { data, error };
+}
+
 export async function getSettings() {
   if (!isConfigured) return { data: {}, error: null };
   const { data, error } = await supabase.from('settings').select('*');
