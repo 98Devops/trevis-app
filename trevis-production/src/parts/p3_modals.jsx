@@ -621,9 +621,21 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
 ═══════════════════════════════════════════════════════════ */
 function EditPaymentInline({ payment, onSave, onCancel }) {
   const [amount, setAmount] = useState(payment.amount);
-  const [method, setMethod] = useState(payment.payment_method);
+  const [method, setMethod] = useState(payment.payment_method || 'Cash');
   const [receipt, setReceipt] = useState(payment.receipt_number || '');
   const [notes, setNotes] = useState(payment.notes || '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await onSave({ amount: Number(amount), payment_method: method, receipt_number: receipt, notes });
+    } catch (err) {
+      console.error('Save failed:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div style={{ background: T.blueDim, border: `1px solid ${T.blue}40`, borderRadius: 8, padding: 10 }}>
@@ -661,8 +673,8 @@ function EditPaymentInline({ payment, onSave, onCancel }) {
           placeholder="Notes"
         />
         <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
-          <button onClick={onCancel} style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 8px", color: T.text, fontSize: 11, cursor: "pointer", fontFamily: font }}>Cancel</button>
-          <button onClick={() => onSave({ amount: Number(amount), payment_method: method, receipt_number: receipt, notes })} style={{ flex: 1, background: T.blue, border: "none", borderRadius: 6, padding: "6px 8px", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: font }}>Save</button>
+          <button onClick={onCancel} disabled={saving} style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 8px", color: T.text, fontSize: 11, cursor: saving ? "not-allowed" : "pointer", fontFamily: font }}>Cancel</button>
+          <button onClick={handleSave} disabled={saving} style={{ flex: 1, background: saving ? T.border : T.blue, border: "none", borderRadius: 6, padding: "6px 8px", color: saving ? T.muted : "#fff", fontSize: 11, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer", fontFamily: font }}>{saving ? "Saving..." : "Save"}</button>
         </div>
       </div>
     </div>

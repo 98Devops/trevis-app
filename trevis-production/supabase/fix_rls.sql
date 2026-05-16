@@ -1,24 +1,8 @@
 -- TREVIS RLS FIX — Run in Supabase SQL Editor
--- Fixes circular dependency where is_admin() queries profiles
--- but profiles RLS calls is_admin()
+-- Fixes infinite recursion where policies on profiles query profiles directly.
+-- Solution: is_admin() is SECURITY DEFINER so it bypasses RLS.
 
--- Step 1: Drop problematic policies on profiles
-DROP POLICY IF EXISTS "Users can read own profile" ON profiles;
-DROP POLICY IF EXISTS "Admin can manage all profiles" ON profiles;
-
--- Step 2: Recreate without circular is_admin() call
-CREATE POLICY "Users can read own profile" ON profiles
-  FOR SELECT USING (id = auth.uid());
-
-CREATE POLICY "Admin can manage all profiles" ON profiles
-  FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM profiles p
-      WHERE p.id = auth.uid() AND p.role = 'ADMIN'
-    )
-  );
-
--- Step 3: Make is_admin() robust with SECURITY DEFINER (bypasses RLS)
+-- Step 1: Create is_admin() FIRST (SECURITY DEFINER bypasses RLS)
 CREATE OR REPLACE FUNCTION is_admin()
 RETURNS boolean AS $$
   SELECT coalesce(
@@ -27,26 +11,22 @@ RETURNS boolean AS $$
   );
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
--- Step 4: Add delete policy for payments (Admins only)
+-- Step 2: Fix profiles policies — use is_admin() not direct query
+DROP POLICY IF EXISTS "Users can read own profile" ON profiles;
+DROP POLICY IF EXISTS "Admin can manage all profiles" ON profiles;
+
+CREATE POLICY "Users can read own profile" ON profiles
+  FOR SELECT USING (id = auth.uid());
+
+CREATE POLICY "Admin can manage all profiles" ON profiles
+  FOR ALL USING (is_admin());
+
+-- Step 3: Fix payments policies — use is_admin()
 DROP POLICY IF EXISTS "Admins can delete payments" ON payments;
-
-CREATE POLICY "Admins can delete payments" ON payments
-  FOR DELETE USING (
-    EXISTS (
-      SELECT 1 FROM profiles 
-      WHERE profiles.id = auth.uid() 
-      AND profiles.role = 'ADMIN'
-    )
-  );
-
--- Step 5: Ensure admins can also update payments
 DROP POLICY IF EXISTS "Admins can update payments" ON payments;
 
+CREATE POLICY "Admins can delete payments" ON payments
+  FOR DELETE USING (is_admin());
+
 CREATE POLICY "Admins can update payments" ON payments
-  FOR UPDATE USING (
-    EXISTS (
-      SELECT 1 FROM profiles 
-      WHERE profiles.id = auth.uid() 
-      AND profiles.role = 'ADMIN'
-    )
-  );
+  FOR UPDATE USING (is_admin());

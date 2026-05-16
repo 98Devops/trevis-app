@@ -1,24 +1,9 @@
 -- ══════════════════════════════════════════════════════════════
--- TREVIS SPRINT 4 — ALL DATABASE FIXES IN ONE FILE
--- Run this in Supabase SQL Editor in one go
+-- TREVIS SPRINT 4 — ALL DATABASE FIXES (v2 — fixes RLS recursion)
+-- Run this ENTIRE file in Supabase SQL Editor in one go.
 -- ══════════════════════════════════════════════════════════════
 
--- ── 1. FIX RLS POLICIES ────────────────────────────────────
-
--- Fix circular dependency in profiles RLS
-DROP POLICY IF EXISTS "Users can read own profile" ON profiles;
-DROP POLICY IF EXISTS "Admin can manage all profiles" ON profiles;
-
-CREATE POLICY "Users can read own profile" ON profiles
-  FOR SELECT USING (id = auth.uid());
-
-CREATE POLICY "Admin can manage all profiles" ON profiles
-  FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM profiles p
-      WHERE p.id = auth.uid() AND p.role = 'ADMIN'
-    )
-  );
+-- ── 1. CREATE is_admin() FIRST (SECURITY DEFINER bypasses RLS) ──
 
 CREATE OR REPLACE FUNCTION is_admin()
 RETURNS boolean AS $$
@@ -28,29 +13,31 @@ RETURNS boolean AS $$
   );
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
--- Payment delete policy
+-- ── 2. FIX PROFILES RLS (no more direct self-referencing queries) ──
+
+DROP POLICY IF EXISTS "Users can read own profile" ON profiles;
+DROP POLICY IF EXISTS "Admin can manage all profiles" ON profiles;
+
+-- Users can always read their own row
+CREATE POLICY "Users can read own profile" ON profiles
+  FOR SELECT USING (id = auth.uid());
+
+-- Admins can do anything — uses is_admin() which bypasses RLS
+CREATE POLICY "Admin can manage all profiles" ON profiles
+  FOR ALL USING (is_admin());
+
+-- ── 3. FIX PAYMENTS RLS — use is_admin() not direct profiles query ──
+
 DROP POLICY IF EXISTS "Admins can delete payments" ON payments;
-CREATE POLICY "Admins can delete payments" ON payments
-  FOR DELETE USING (
-    EXISTS (
-      SELECT 1 FROM profiles 
-      WHERE profiles.id = auth.uid() 
-      AND profiles.role = 'ADMIN'
-    )
-  );
-
--- Payment update policy
 DROP POLICY IF EXISTS "Admins can update payments" ON payments;
-CREATE POLICY "Admins can update payments" ON payments
-  FOR UPDATE USING (
-    EXISTS (
-      SELECT 1 FROM profiles 
-      WHERE profiles.id = auth.uid() 
-      AND profiles.role = 'ADMIN'
-    )
-  );
 
--- ── 2. FIX GENERATE OBLIGATIONS ────────────────────────────
+CREATE POLICY "Admins can delete payments" ON payments
+  FOR DELETE USING (is_admin());
+
+CREATE POLICY "Admins can update payments" ON payments
+  FOR UPDATE USING (is_admin());
+
+-- ── 4. FIX GENERATE OBLIGATIONS ─────────────────────────────
 
 DROP FUNCTION IF EXISTS generate_monthly_obligations(date);
 
@@ -79,9 +66,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- ── 3. FIX RECALCULATE BALANCES ────────────────────────────
+-- ── 5. FIX RECALCULATE BALANCES ─────────────────────────────
 
-DROP FUNCTION IF EXISTS recalculate_student_balances();
+DROP FUNCTION IF EXISTS recalculate_student_balances() CASCADE;
 
 CREATE OR REPLACE FUNCTION recalculate_student_balances()
 RETURNS integer AS $$
@@ -104,7 +91,7 @@ BEGIN
     FROM payments p
     WHERE p.student_id = stud.id
       AND DATE_TRUNC('month', p.payment_date) = current_month;
-    
+
     room_rent := stud.rent_per_bed;
     IF total_paid >= room_rent THEN
       new_status := 'PAID';
@@ -113,29 +100,23 @@ BEGIN
     ELSE
       new_status := 'OVERDUE';
     END IF;
-    
+
     INSERT INTO monthly_obligations (student_id, month, amount_due, amount_paid, status)
-    VALUES (
-      stud.id, 
-      current_month, 
-      room_rent, 
-      total_paid, 
-      new_status
-    )
-    ON CONFLICT (student_id, month) 
-    DO UPDATE SET 
+    VALUES (stud.id, current_month, room_rent, total_paid, new_status)
+    ON CONFLICT (student_id, month)
+    DO UPDATE SET
       amount_paid = EXCLUDED.amount_paid,
       status = EXCLUDED.status,
       updated_at = NOW();
-    
+
     cnt := cnt + 1;
   END LOOP;
-  
+
   RETURN cnt;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- ── 4. FIX TRIGGER ─────────────────────────────────────────
+-- ── 6. FIX TRIGGER ──────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION trigger_recalculate_balances()
 RETURNS trigger AS $$
@@ -153,8 +134,7 @@ CREATE TRIGGER payments_recalculate_trigger
   EXECUTE FUNCTION trigger_recalculate_balances();
 
 -- ══════════════════════════════════════════════════════════════
--- DONE — All fixes applied. Test the following:
--- 1. Delete a payment → student should become OVERDUE
--- 2. Edit a payment amount → status should recalculate
--- 3. Generate obligations → should succeed without constraint error
+-- DONE. The key fix: all policies now use is_admin() which is
+-- SECURITY DEFINER — it bypasses RLS when reading profiles,
+-- breaking the infinite recursion loop.
 -- ══════════════════════════════════════════════════════════════

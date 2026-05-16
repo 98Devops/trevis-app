@@ -49,18 +49,21 @@ export async function updatePayment(paymentId, updates, userId) {
     updates.month_year = updates.payment_date.substring(0, 7); // 'YYYY-MM'
   }
   
-  const { data, error } = await supabase
-    .from('payments')
-    .update({
-      ...updates,
-      updated_at: new Date().toISOString(),
-      edited_by: userId
-    })
-    .eq('id', paymentId)
-    .select()
-    .single();
+  // Build clean update payload — only include fields that exist in the payments table
+  const payload = {};
+  if (updates.amount !== undefined) payload.amount = updates.amount;
+  if (updates.payment_method !== undefined) payload.payment_method = updates.payment_method;
+  if (updates.receipt_number !== undefined) payload.receipt_number = updates.receipt_number;
+  if (updates.notes !== undefined) payload.notes = updates.notes;
+  if (updates.payment_date !== undefined) payload.payment_date = updates.payment_date;
+  if (updates.month_year !== undefined) payload.month_year = updates.month_year;
   
-  return { data, error };
+  const { error } = await supabase
+    .from('payments')
+    .update(payload)
+    .eq('id', paymentId);
+  
+  return { data: !error, error };
 }
 
 export async function deletePayment(paymentId) {

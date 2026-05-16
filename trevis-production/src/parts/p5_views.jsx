@@ -51,6 +51,8 @@ export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, o
 
 function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom }) {
   const [open, setOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const real = room.students.filter(s=>s.status!=="VACANT"&&s.status!=="VACATED");
   const paid = real.filter(s=>s.status==="PAID").length;
   const issues = real.filter(s=>s.status!=="PAID").length;
@@ -61,13 +63,21 @@ function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom }) 
   const collected = real.reduce((sum, s) => sum + (s.paid || 0), 0);
   const outstanding = expected - collected;
 
-  const handleRemove = () => {
+  const handleRemoveClick = () => {
     if (real.length > 0) {
       alert(`Cannot remove ${room.no} — ${real.length} active students assigned. Remove or relocate students first.`);
       return;
     }
-    if (window.confirm(`Remove ${room.no}? This will soft-delete the room.`)) {
-      if (onRemoveRoom) onRemoveRoom(room.id);
+    setConfirmDelete(true);
+  };
+
+  const handleConfirmRemove = async () => {
+    setIsDeleting(true);
+    try {
+      if (onRemoveRoom) await onRemoveRoom(room.id);
+    } finally {
+      setIsDeleting(false);
+      setConfirmDelete(false);
     }
   };
 
@@ -122,10 +132,19 @@ function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom }) 
                 <div style={{ fontSize:15, fontWeight:700, color:pct===100?T.green:T.amber }}>{pct}%</div>
               </div>
             </div>
-            {isAdmin && (
-              <button onClick={handleRemove} style={{ background:T.redDim, border:`1px solid ${T.red}40`, color:T.red, fontSize:10, fontWeight:700, padding:"5px 10px", borderRadius:6, cursor:"pointer", width:"100%" }}>
+            {isAdmin && !confirmDelete && (
+              <button onClick={handleRemoveClick} style={{ background:T.redDim, border:`1px solid ${T.red}40`, color:T.red, fontSize:10, fontWeight:700, padding:"5px 10px", borderRadius:6, cursor:"pointer", width:"100%" }}>
                 Remove Room
               </button>
+            )}
+            {isAdmin && confirmDelete && (
+              <div style={{ display:"flex", flexDirection:"column", gap:8, width:"100%", background:T.redDim, border:`1px solid ${T.red}40`, padding:10, borderRadius:8 }}>
+                <div style={{ fontSize:12, color:T.red, fontWeight:600, textAlign:"center" }}>Delete room? This cannot be undone.</div>
+                <div style={{ display:"flex", gap:6 }}>
+                  <button onClick={() => setConfirmDelete(false)} disabled={isDeleting} style={{ flex:1, background:T.surface, border:`1px solid ${T.border}`, borderRadius:6, padding:"6px 8px", color:T.text, fontSize:11, cursor:isDeleting?"not-allowed":"pointer" }}>Cancel</button>
+                  <button onClick={handleConfirmRemove} disabled={isDeleting} style={{ flex:1, background:isDeleting?T.border:T.red, border:"none", borderRadius:6, padding:"6px 8px", color:isDeleting?T.muted:"#fff", fontSize:11, fontWeight:600, cursor:isDeleting?"not-allowed":"pointer" }}>{isDeleting ? "Deleting..." : "Delete"}</button>
+                </div>
+              </div>
             )}
           </div>
         </div>
