@@ -27,8 +27,26 @@ RETURNS boolean AS $$
   );
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
--- Step 4: Clear old payments and obligations for clean re-seed
-DELETE FROM payments;
-DELETE FROM monthly_obligations;
+-- Step 4: Add delete policy for payments (Admins only)
+DROP POLICY IF EXISTS "Admins can delete payments" ON payments;
 
--- Done! Now run seed_payments.sql next.
+CREATE POLICY "Admins can delete payments" ON payments
+  FOR DELETE USING (
+    EXISTS (
+      SELECT 1 FROM profiles 
+      WHERE profiles.id = auth.uid() 
+      AND profiles.role = 'ADMIN'
+    )
+  );
+
+-- Step 5: Ensure admins can also update payments
+DROP POLICY IF EXISTS "Admins can update payments" ON payments;
+
+CREATE POLICY "Admins can update payments" ON payments
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM profiles 
+      WHERE profiles.id = auth.uid() 
+      AND profiles.role = 'ADMIN'
+    )
+  );

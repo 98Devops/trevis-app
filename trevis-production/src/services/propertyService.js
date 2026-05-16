@@ -14,7 +14,7 @@ export async function getProperties() {
       rooms(
         *,
         students(
-          id, full_name, status, check_in_date, check_out_date, notes, data_flags, payment_plan,
+          id, full_name, phone, national_id, status, check_in_date, check_out_date, notes, data_flags, payment_plan,
           monthly_obligations(amount_due, amount_paid, status, month),
           payments(id, amount, payment_date, payment_method, receipt_number, month_year, notes)
         )

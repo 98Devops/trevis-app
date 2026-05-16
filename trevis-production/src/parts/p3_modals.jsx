@@ -378,9 +378,10 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
   };
 
   const handleDeletePayment = async (paymentId) => {
-    const { deletePayment, recalculateBalances } = await import('./p1_imports_context.jsx');
-    const { error } = await deletePayment(paymentId);
-    if (!error) {
+    try {
+      const { deletePayment, recalculateBalances } = await import('./p1_imports_context.jsx');
+      const { error } = await deletePayment(paymentId);
+      if (error) throw error;
       // Recalculate all balances and statuses
       await recalculateBalances();
       // Refresh payment history
@@ -390,6 +391,10 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
       setConfirmDelete(null);
       // Trigger full app refresh to recalculate everything
       if (refresh) refresh();
+    } catch (err) {
+      console.error('Delete payment failed:', err);
+      alert('Failed to delete payment: ' + (err.message || 'Unknown error'));
+      setConfirmDelete(null);
     }
   };
 
@@ -519,17 +524,23 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
                     <EditPaymentInline 
                       payment={p} 
                       onSave={async (updated) => {
-                        const { updatePayment, recalculateBalances } = await import('./p1_imports_context.jsx');
-                        await updatePayment(p.id, updated, user?.email || 'system');
-                        // Recalculate all balances and statuses
-                        await recalculateBalances();
-                        // Refresh payment history
-                        const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
-                        const { data } = await getPaymentsByStudent(student.id);
-                        setPaymentHistory(data || []);
-                        setEditingPayment(null);
-                        // Trigger full app refresh to recalculate everything
-                        if (refresh) refresh();
+                        try {
+                          const { updatePayment, recalculateBalances } = await import('./p1_imports_context.jsx');
+                          const { error: updateError } = await updatePayment(p.id, updated, user?.email || 'system');
+                          if (updateError) throw updateError;
+                          // Recalculate all balances and statuses
+                          await recalculateBalances();
+                          // Refresh payment history
+                          const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
+                          const { data } = await getPaymentsByStudent(student.id);
+                          setPaymentHistory(data || []);
+                          setEditingPayment(null);
+                          // Trigger full app refresh to recalculate everything
+                          if (refresh) refresh();
+                        } catch (err) {
+                          console.error('Edit payment failed:', err);
+                          alert('Failed to save payment: ' + (err.message || 'Unknown error'));
+                        }
                       }}
                       onCancel={() => setEditingPayment(null)}
                     />

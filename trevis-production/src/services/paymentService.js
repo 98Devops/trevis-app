@@ -66,12 +66,10 @@ export async function updatePayment(paymentId, updates, userId) {
 export async function deletePayment(paymentId) {
   if (!isConfigured) return { data: null, error: { message: 'Not configured' } };
   
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('payments')
     .delete()
-    .eq('id', paymentId)
-    .select()
-    .single();
+    .eq('id', paymentId);
   
-  return { data, error };
+  return { data: !error, error };
 }

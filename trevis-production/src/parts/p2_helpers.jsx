@@ -199,8 +199,11 @@ export function buildProps(rawProperties) {
 
     const rooms = sortedRooms.map(r => {
       totalBeds += r.bed_capacity;
+      // Include all non-vacant/non-vacated students
+      // DB recalculate function may set status to PAID/PARTIAL/OVERDUE,
+      // so we cannot filter by status === 'ACTIVE' only
       const students = (r.students || [])
-        .filter(s => s.status === 'ACTIVE')
+        .filter(s => s.status !== 'VACANT' && s.status !== 'VACATED')
         .map(s => {
           studentCount++;
           const rent = Number(r.rent_per_bed);
@@ -227,9 +230,11 @@ export function buildProps(rawProperties) {
           expected += rent;
           collected += paid;
 
+          // Compute status client-side from payment data (source of truth)
           const status = paid >= rent ? 'PAID' : paid > 0 ? 'PARTIAL' : 'OVERDUE';
+          const balance = rent - paid;
           if (status !== 'PAID') {
-            overdue.push({ ...s, name: s.full_name, room: r.room_number, roomRent: rent, paid, balance: rent - paid, status });
+            overdue.push({ ...s, name: s.full_name, room: r.room_number, roomRent: rent, paid, balance, status });
           }
 
           // Build payment history from payments records
@@ -238,8 +243,20 @@ export function buildProps(rawProperties) {
             method: p.payment_method, receipt: p.receipt_number, notes: p.notes
           }));
 
-          return { id: s.id, name: s.full_name, paid, status, date: s.check_in_date || "—", notes: s.notes, dataFlags: s.data_flags, payHistory };
+          return {
+            id: s.id, name: s.full_name, paid, balance, status,
+            date: s.check_in_date || "—", notes: s.notes, dataFlags: s.data_flags,
+            phone: s.phone || null, idNumber: s.national_id || null,
+            payHistory
+          };
         });
+
+      // Add vacant bed placeholders
+      const vacantCount = Math.max(0, r.bed_capacity - students.length);
+      for (let i = 0; i < vacantCount; i++) {
+        students.push({ id: `vacant-${r.id}-${i}`, name: '— Vacant —', paid: 0, balance: 0, status: 'VACANT', date: '—', notes: '', payHistory: [] });
+      }
+
       return { id: r.id, no: r.room_number, beds: r.bed_capacity, rent: Number(r.rent_per_bed), students, notes: r.notes };
     });
 

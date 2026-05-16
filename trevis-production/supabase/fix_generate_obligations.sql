@@ -1,5 +1,6 @@
 -- Fix Generate Obligations Function
 -- Run this to fix the constraint error
+-- Uses 'OVERDUE' status instead of 'PENDING' which violates the check constraint
 
 -- Drop and recreate the function with correct status
 DROP FUNCTION IF EXISTS generate_monthly_obligations(date);
@@ -14,7 +15,8 @@ BEGIN
     SELECT s.id as student_id, r.rent_per_bed as amount_due
     FROM students s
     JOIN rooms r ON r.id = s.room_id
-    WHERE s.status = 'ACTIVE'
+    WHERE s.status IN ('ACTIVE', 'PAID', 'PARTIAL', 'OVERDUE')
+      AND r.is_active = true
       AND NOT EXISTS (
         SELECT 1 FROM monthly_obligations mo
         WHERE mo.student_id = s.id AND mo.month = p_month
