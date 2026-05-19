@@ -600,7 +600,7 @@ function DayPanel({ dayData, onClose, onStudentClick }) {
     <div onClick={onClose} style={{ 
       position: "fixed", 
       inset: 0, 
-      background: "rgba(0,0,0,.4)", 
+      background: "rgba(0,0,0,.85)", 
       display: "flex", 
       alignItems: "center", 
       justifyContent: "center", 
@@ -609,14 +609,14 @@ function DayPanel({ dayData, onClose, onStudentClick }) {
       <div onClick={e => e.stopPropagation()} className="pn-day-panel-inner"
         style={{ 
           background: T.card, 
-          border: `1px solid ${T.border}`, 
+          border: `2px solid ${T.gold}40`, 
           borderRadius: 16, 
           padding: 32, 
           width: 480, 
           maxWidth: "90%", 
           maxHeight: "80vh", 
           overflowY: "auto",
-          boxShadow: "0 20px 40px rgba(0,0,0,.15)"
+          boxShadow: "0 25px 80px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.1)"
         }}>
         
         {/* Header */}
@@ -762,7 +762,7 @@ function MobileDayPanel({ dayData, onClose, onStudentClick }) {
     <div onClick={onClose} style={{ 
       position: "fixed", 
       inset: 0, 
-      background: "rgba(0,0,0,.4)", 
+      background: "rgba(0,0,0,.85)", 
       display: "flex", 
       alignItems: "flex-end", 
       justifyContent: "center", 
@@ -778,13 +778,14 @@ function MobileDayPanel({ dayData, onClose, onStudentClick }) {
           background: T.card, 
           borderTopLeftRadius: 20,
           borderTopRightRadius: 20,
+          borderTop: `2px solid ${T.gold}40`,
           width: "100%", 
           height: "70vh",
           overflowY: "auto",
           transform: isDragging ? `translateY(${Math.max(0, currentY - startY)}px)` : 'translateY(0)',
           transition: isDragging ? 'none' : 'transform 0.3s ease-out',
           animation: 'slideUp 0.3s ease-out',
-          boxShadow: "0 -10px 30px rgba(0,0,0,.15)"
+          boxShadow: "0 -15px 50px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.1)"
         }}>
         
         {/* Drag Handle */}
