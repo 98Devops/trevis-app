@@ -555,6 +555,8 @@ export function Calendar({ props, onStudentClick }) {
         /* Desktop calendar visible by default */
         .pn-calendar-desktop { display: block; }
         .pn-calendar-mobile { display: none !important; }
+        .pn-day-panel-wrapper { display: flex !important; }
+        .pn-mobile-day-panel-wrapper { display: none !important; }
         .pn-day-panel-inner { display: block; }
         .pn-mobile-day-panel { display: none !important; }
         .pn-upcoming-desktop { display: flex; }
@@ -564,6 +566,8 @@ export function Calendar({ props, onStudentClick }) {
         @media (max-width: 768px) {
           .pn-calendar-desktop { display: none !important; }
           .pn-calendar-mobile { display: block !important; }
+          .pn-day-panel-wrapper { display: none !important; }
+          .pn-mobile-day-panel-wrapper { display: flex !important; }
           .pn-day-panel-inner { display: none !important; }
           .pn-mobile-day-panel { display: block !important; }
           .pn-upcoming-desktop { display: none !important; }
@@ -574,6 +578,8 @@ export function Calendar({ props, onStudentClick }) {
         @media (min-width: 769px) and (max-width: 1024px) {
           .pn-calendar-desktop { display: block; }
           .pn-calendar-mobile { display: none !important; }
+          .pn-day-panel-wrapper { display: flex !important; }
+          .pn-mobile-day-panel-wrapper { display: none !important; }
           .pn-day-panel-inner { display: block; }
           .pn-mobile-day-panel { display: none !important; }
         }
@@ -599,6 +605,7 @@ function DayPanel({ dayData, onClose, onStudentClick }) {
   return (
     <div 
       onClick={onClose} 
+      className="pn-day-panel-wrapper"
       style={{ 
         position: "fixed", 
         top: 0,
@@ -785,7 +792,7 @@ function MobileDayPanel({ dayData, onClose, onStudentClick }) {
   const totalPayments = dayData.payments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
   return (
-    <div onClick={onClose} style={{ 
+    <div onClick={onClose} className="pn-mobile-day-panel-wrapper" style={{ 
       position: "fixed", 
       inset: 0, 
       background: "rgba(0,0,0,.85)", 
@@ -801,17 +808,17 @@ function MobileDayPanel({ dayData, onClose, onStudentClick }) {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         style={{ 
-          background: T.card, 
+          backgroundColor: "#181D26", 
           borderTopLeftRadius: 20,
           borderTopRightRadius: 20,
-          borderTop: `2px solid ${T.gold}40`,
+          borderTop: `2px solid #F5A623`,
           width: "100%", 
           height: "70vh",
           overflowY: "auto",
           transform: isDragging ? `translateY(${Math.max(0, currentY - startY)}px)` : 'translateY(0)',
           transition: isDragging ? 'none' : 'transform 0.3s ease-out',
           animation: 'slideUp 0.3s ease-out',
-          boxShadow: "0 -15px 50px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.1)"
+          boxShadow: "0 -15px 50px rgba(0,0,0,.8)"
         }}>
         
         {/* Drag Handle */}
@@ -819,12 +826,12 @@ function MobileDayPanel({ dayData, onClose, onStudentClick }) {
           display: "flex", 
           justifyContent: "center", 
           padding: "12px 0 8px 0",
-          borderBottom: `1px solid ${T.border}20`
+          borderBottom: `1px solid #232836`
         }}>
           <div style={{ 
             width: 40, 
             height: 4, 
-            background: T.muted, 
+            backgroundColor: "#9CA3AF", 
             borderRadius: 2 
           }} />
         </div>
@@ -832,8 +839,8 @@ function MobileDayPanel({ dayData, onClose, onStudentClick }) {
         <div style={{ padding: "16px 20px" }}>
           {/* Header */}
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 18, fontWeight: 800, color: T.text, marginBottom: 4 }}>{dateLabel}</div>
-            <div style={{ fontSize: 12, color: T.muted }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#E8EAF0", marginBottom: 4 }}>{dateLabel}</div>
+            <div style={{ fontSize: 12, color: "#9CA3AF" }}>
               {dayData.payments.length} payments · {dayData.checkins.length} check-ins · {dayData.obligations.length} obligations
             </div>
           </div>
@@ -841,21 +848,21 @@ function MobileDayPanel({ dayData, onClose, onStudentClick }) {
           {/* Payments */}
           {dayData.payments.length > 0 && (
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: T.green, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#22C55E", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
                 <span>💰 PAYMENTS ({dayData.payments.length})</span>
-                {totalPayments > 0 && <span style={{ fontSize: 11, color: T.muted }}>({fmt(totalPayments)})</span>}
+                {totalPayments > 0 && <span style={{ fontSize: 11, color: "#9CA3AF" }}>({fmt(totalPayments)})</span>}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {dayData.payments.map((payment, i) => (
-                  <div key={i} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14 }}>
+                  <div key={i} style={{ backgroundColor: "#131720", border: `2px solid #232836`, borderRadius: 12, padding: 14 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{payment.student}</div>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: T.green, fontFamily: "'IBM Plex Mono',monospace" }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "#E8EAF0" }}>{payment.student}</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: "#22C55E", fontFamily: "'IBM Plex Mono',monospace" }}>
                         {fmt(payment.amount)}
                       </div>
                     </div>
-                    <div style={{ fontSize: 12, color: T.muted }}>{payment.property} — Room {payment.room}</div>
-                    <div style={{ fontSize: 11, color: T.subtle, marginTop: 4 }}>{payment.method}</div>
+                    <div style={{ fontSize: 12, color: "#9CA3AF" }}>{payment.property} — Room {payment.room}</div>
+                    <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 4 }}>{payment.method}</div>
                   </div>
                 ))}
               </div>
@@ -865,7 +872,7 @@ function MobileDayPanel({ dayData, onClose, onStudentClick }) {
           {/* Check-ins */}
           {dayData.checkins.length > 0 && (
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: T.gold, marginBottom: 12 }}>🏠 CHECK-INS ({dayData.checkins.length})</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#F5A623", marginBottom: 12 }}>🏠 CHECK-INS ({dayData.checkins.length})</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {dayData.checkins.map((checkin, i) => (
                   <div key={i} 
@@ -875,15 +882,15 @@ function MobileDayPanel({ dayData, onClose, onStudentClick }) {
                       checkin.property
                     )}
                     style={{ 
-                      background: T.surface, 
-                      border: `1px solid ${T.border}`, 
+                      backgroundColor: "#131720", 
+                      border: `2px solid #232836`, 
                       borderRadius: 12, 
                       padding: 14, 
                       cursor: "pointer",
                       minHeight: 44 // Touch target
                     }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: T.text, marginBottom: 4 }}>{checkin.student}</div>
-                    <div style={{ fontSize: 12, color: T.muted }}>{checkin.property} — Room {checkin.room}</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#E8EAF0", marginBottom: 4 }}>{checkin.student}</div>
+                    <div style={{ fontSize: 12, color: "#9CA3AF" }}>{checkin.property} — Room {checkin.room}</div>
                   </div>
                 ))}
               </div>
@@ -893,10 +900,10 @@ function MobileDayPanel({ dayData, onClose, onStudentClick }) {
           {/* Obligations */}
           {dayData.obligations.length > 0 && (
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: T.red, marginBottom: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#EF4444", marginBottom: 12 }}>
                 ⚠ OBLIGATIONS ({dayData.obligations.length})
               </div>
-              <div style={{ fontSize: 12, color: T.subtle, marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 12 }}>
                 Monthly rent obligations due
               </div>
             </div>
@@ -904,7 +911,7 @@ function MobileDayPanel({ dayData, onClose, onStudentClick }) {
 
           {/* Empty state */}
           {dayData.payments.length === 0 && dayData.checkins.length === 0 && dayData.obligations.length === 0 && (
-            <div style={{ padding: 40, textAlign: "center", color: T.muted, fontSize: 14 }}>
+            <div style={{ padding: 40, textAlign: "center", color: "#9CA3AF", fontSize: 14 }}>
               No events on this date.
             </div>
           )}
