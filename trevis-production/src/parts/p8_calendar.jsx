@@ -597,56 +597,80 @@ function DayPanel({ dayData, onClose, onStudentClick }) {
   const unpaidObligations = totalObligations - paidObligations;
 
   return (
-    <div onClick={onClose} style={{ 
-      position: "fixed", 
-      inset: 0, 
-      background: "rgba(0,0,0,.85)", 
-      display: "flex", 
-      alignItems: "center", 
-      justifyContent: "center", 
-      zIndex: 1000
-    }}>
-      <div onClick={e => e.stopPropagation()} className="pn-day-panel-inner"
+    <div 
+      onClick={onClose} 
+      style={{ 
+        position: "fixed", 
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0,0,0,0.9)", 
+        display: "flex", 
+        alignItems: "center", 
+        justifyContent: "center", 
+        zIndex: 9999,
+        padding: "20px"
+      }}
+    >
+      <div 
+        onClick={e => e.stopPropagation()} 
+        className="pn-day-panel-inner"
         style={{ 
-          background: T.card, 
-          border: `2px solid ${T.gold}40`, 
-          borderRadius: 16, 
-          padding: 32, 
-          width: 480, 
-          maxWidth: "90%", 
-          maxHeight: "80vh", 
+          backgroundColor: "#181D26",
+          border: "3px solid #F5A623", 
+          borderRadius: "20px", 
+          padding: "40px", 
+          width: "500px", 
+          maxWidth: "95vw", 
+          maxHeight: "85vh", 
           overflowY: "auto",
-          boxShadow: "0 25px 80px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.1)"
+          boxShadow: "0 30px 100px rgba(0,0,0,0.8)",
+          position: "relative"
         }}>
         
         {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 30 }}>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: T.text }}>{dateLabel}</div>
-            <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#E8EAF0", marginBottom: 8 }}>{dateLabel}</div>
+            <div style={{ fontSize: 14, color: "#9CA3AF" }}>
               {dayData.payments.length} payments · {dayData.checkins.length} check-ins · {dayData.obligations.length} obligations
             </div>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 20 }}>✕</button>
+          <button 
+            onClick={onClose} 
+            style={{ 
+              background: "none", 
+              border: "2px solid #F5A623", 
+              borderRadius: "8px",
+              color: "#F5A623", 
+              cursor: "pointer", 
+              fontSize: 18,
+              padding: "8px 12px",
+              fontWeight: "bold"
+            }}
+          >
+            ✕ Close
+          </button>
         </div>
 
         {/* Payments */}
         {dayData.payments.length > 0 && (
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.green, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ marginBottom: 25 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#22C55E", marginBottom: 15, display: "flex", alignItems: "center", gap: 8 }}>
               <span>💰 PAYMENTS RECORDED ({dayData.payments.length})</span>
-              {totalPayments > 0 && <span style={{ fontSize: 11, color: T.muted }}>({fmt(totalPayments)} total)</span>}
+              {totalPayments > 0 && <span style={{ fontSize: 12, color: "#9CA3AF" }}>({fmt(totalPayments)} total)</span>}
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {dayData.payments.map((payment, i) => (
-                <div key={i} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>● {payment.student}</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: T.green, fontFamily: "'IBM Plex Mono',monospace" }}>
+                <div key={i} style={{ backgroundColor: "#131720", border: "2px solid #232836", borderRadius: 12, padding: 16 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: "#E8EAF0" }}>● {payment.student}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: "#22C55E", fontFamily: "'IBM Plex Mono',monospace" }}>
                       {fmt(payment.amount)} {payment.method}
                     </div>
                   </div>
-                  <div style={{ fontSize: 11, color: T.muted }}>{payment.property} — {payment.room}</div>
+                  <div style={{ fontSize: 13, color: "#9CA3AF" }}>{payment.property} — {payment.room}</div>
                 </div>
               ))}
             </div>
@@ -655,22 +679,23 @@ function DayPanel({ dayData, onClose, onStudentClick }) {
 
         {/* Obligations */}
         {dayData.obligations.length > 0 && (
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.red, marginBottom: 10 }}>
+          <div style={{ marginBottom: 25 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#EF4444", marginBottom: 15 }}>
               ⚠ OBLIGATIONS DUE ({totalObligations})
             </div>
-            <div style={{ fontSize: 12, color: T.subtle, marginBottom: 10 }}>
+            <div style={{ fontSize: 14, color: "#9CA3AF", marginBottom: 15 }}>
               {paidObligations} paid · {unpaidObligations} overdue
               <button style={{ 
-                marginLeft: 12, 
-                background: T.goldDim, 
-                border: `1px solid ${T.gold}40`, 
-                borderRadius: 6, 
-                padding: "4px 8px", 
-                color: T.gold, 
-                fontSize: 10, 
+                marginLeft: 15, 
+                backgroundColor: "#F5A62330", 
+                border: "2px solid #F5A623", 
+                borderRadius: 8, 
+                padding: "6px 12px", 
+                color: "#F5A623", 
+                fontSize: 12, 
                 cursor: "pointer", 
-                fontFamily: font 
+                fontFamily: font,
+                fontWeight: "600"
               }}>
                 View in Finances →
               </button>
@@ -680,9 +705,9 @@ function DayPanel({ dayData, onClose, onStudentClick }) {
 
         {/* Check-ins */}
         {dayData.checkins.length > 0 && (
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: T.gold, marginBottom: 10 }}>🏠 CHECK-INS ({dayData.checkins.length})</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ marginBottom: 25 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#F5A623", marginBottom: 15 }}>🏠 CHECK-INS ({dayData.checkins.length})</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {dayData.checkins.map((checkin, i) => (
                 <div key={i} 
                   onClick={() => onStudentClick && onStudentClick(
@@ -691,17 +716,18 @@ function DayPanel({ dayData, onClose, onStudentClick }) {
                     checkin.property
                   )}
                   style={{ 
-                    background: T.surface, 
-                    border: `1px solid ${T.border}`, 
-                    borderRadius: 10, 
-                    padding: 12, 
+                    backgroundColor: "#131720", 
+                    border: "2px solid #232836", 
+                    borderRadius: 12, 
+                    padding: 16, 
                     cursor: "pointer", 
-                    transition: "background .15s" 
+                    transition: "all 0.2s ease"
                   }}
-                  onMouseEnter={e => e.currentTarget.style.background = T.hover}
-                  onMouseLeave={e => e.currentTarget.style.background = T.surface}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>● {checkin.student}</div>
-                  <div style={{ fontSize: 11, color: T.muted }}>{checkin.property} — {checkin.room}</div>
+                  onMouseEnter={e => e.currentTarget.style.backgroundColor = "#1E2330"}
+                  onMouseLeave={e => e.currentTarget.style.backgroundColor = "#131720"}
+                >
+                  <div style={{ fontSize: 15, fontWeight: 600, color: "#E8EAF0", marginBottom: 4 }}>● {checkin.student}</div>
+                  <div style={{ fontSize: 13, color: "#9CA3AF" }}>{checkin.property} — {checkin.room}</div>
                 </div>
               ))}
             </div>
