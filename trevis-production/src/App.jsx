@@ -8,6 +8,7 @@ import { Reports } from "./parts/p6_reports.jsx";
 import { Finances } from "./parts/p7_arrears.jsx";
 import { Calendar } from "./parts/p8_calendar.jsx";
 import { SettingsPanel } from "./parts/p9_settings.jsx";
+import ErrorBoundary from "./components/ErrorBoundary.jsx";
 
 /* ═══════════════════════════════════════════════════════════
    NAVIGATION
@@ -287,41 +288,65 @@ function AppInner() {
 
         {/* Main */}
         <div className="pn-main" style={{ flex:1, padding:"36px 40px", overflowY:"auto", maxHeight:"100vh" }}>
-          {view === "dashboard" && <Dashboard props={visibleProps} onSelect={handleSelect}
-            onAddStudent={()=>{if(isAdmin){setAddStudentProp("");setShowAddStudent(true);}}}
-            onRecordPayment={()=>{setPaymentProp(null);setShowPayment(true);}}
-            onExport={handleExportCSV}
-            onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}}
-            onPropertyCardClick={handlePropertyCardClick} />}
-          {view === "property" && selProp && <PropertyDetail name={selProp} props={visibleProps} onBack={handleBack}
-            onOpenPay={()=>{setPaymentProp(activePropObj);setShowPayment(true);}}
-            onAddStudent={()=>{if(isAdmin){setAddStudentProp(selProp);setShowAddStudent(true);}}}
-            onAddRoom={()=>{if(isAdmin&&activePropObj){setAddRoomPropId(activePropObj.id);setAddRoomPropName(activePropObj.name);setShowAddRoom(true);}}}
-            onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}}
-            onExport={handlePropertyExport}
-            onRemoveRoom={handleRemoveRoom}
-            isAdmin={isAdmin} />}
-          {view === "students" && <Students props={visibleProps}
-            onAddStudent={()=>{if(isAdmin){setAddStudentProp("");setShowAddStudent(true);}}}
-            onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}} />}
-          {view === "calendar" && <Calendar props={visibleProps}
-            onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}} />}
-          {view === "finances" && <Finances props={visibleProps}
-            onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}}
-            initialPropFilter={financesFilter} />}
-          {view === "reports" && <Reports props={visibleProps} dataFlags={dataFlags} isAdmin={isAdmin}
-            onSaveSnapshot={async ()=>{
-              const d = new Date(); const month = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
-              const {data,error}=await saveMonthlySnapshot(month);
-              if(error) showToast('Error: '+error.message,'error');
-              else showToast(`Snapshot saved for ${data} properties`);
-            }}
-            onGenerateObligations={async ()=>{
-              const d = new Date(); const month = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
-              const {data,error}=await generateObligations(month);
-              if(error) showToast('Error: '+error.message,'error');
-              else showToast(`Generated obligations for ${data} students`);
-            }} />}
+          {view === "dashboard" && (
+            <ErrorBoundary componentName="Dashboard">
+              <Dashboard props={visibleProps} onSelect={handleSelect}
+                onAddStudent={()=>{if(isAdmin){setAddStudentProp("");setShowAddStudent(true);}}}
+                onRecordPayment={()=>{setPaymentProp(null);setShowPayment(true);}}
+                onExport={handleExportCSV}
+                onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}}
+                onPropertyCardClick={handlePropertyCardClick} />
+            </ErrorBoundary>
+          )}
+          {view === "property" && selProp && (
+            <ErrorBoundary componentName="PropertyDetail">
+              <PropertyDetail name={selProp} props={visibleProps} onBack={handleBack}
+                onOpenPay={()=>{setPaymentProp(activePropObj);setShowPayment(true);}}
+                onAddStudent={()=>{if(isAdmin){setAddStudentProp(selProp);setShowAddStudent(true);}}}
+                onAddRoom={()=>{if(isAdmin&&activePropObj){setAddRoomPropId(activePropObj.id);setAddRoomPropName(activePropObj.name);setShowAddRoom(true);}}}
+                onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}}
+                onExport={handlePropertyExport}
+                onRemoveRoom={handleRemoveRoom}
+                isAdmin={isAdmin} />
+            </ErrorBoundary>
+          )}
+          {view === "students" && (
+            <ErrorBoundary componentName="Students">
+              <Students props={visibleProps}
+                onAddStudent={()=>{if(isAdmin){setAddStudentProp("");setShowAddStudent(true);}}}
+                onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}} />
+            </ErrorBoundary>
+          )}
+          {view === "calendar" && (
+            <ErrorBoundary componentName="Calendar">
+              <Calendar props={visibleProps}
+                onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}} />
+            </ErrorBoundary>
+          )}
+          {view === "finances" && (
+            <ErrorBoundary componentName="Finances">
+              <Finances props={visibleProps}
+                onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}}
+                initialPropFilter={financesFilter} />
+            </ErrorBoundary>
+          )}
+          {view === "reports" && (
+            <ErrorBoundary componentName="Reports">
+              <Reports props={visibleProps} dataFlags={dataFlags} isAdmin={isAdmin}
+                onSaveSnapshot={async ()=>{
+                  const d = new Date(); const month = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+                  const {data,error}=await saveMonthlySnapshot(month);
+                  if(error) showToast('Error: '+error.message,'error');
+                  else showToast(`Snapshot saved for ${data} properties`);
+                }}
+                onGenerateObligations={async ()=>{
+                  const d = new Date(); const month = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+                  const {data,error}=await generateObligations(month);
+                  if(error) showToast('Error: '+error.message,'error');
+                  else showToast(`Generated obligations for ${data} students`);
+                }} />
+            </ErrorBoundary>
+          )}
         </div>
       </div>
 

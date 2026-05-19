@@ -1,4 +1,4 @@
--- Setup trevisdaradi@gmail.com as ADMIN
+R-- Setup trevisdaradi@gmail.com as ADMIN
 -- Run this after the user has signed up via the app
 
 -- First, ensure the email is in the allowed list

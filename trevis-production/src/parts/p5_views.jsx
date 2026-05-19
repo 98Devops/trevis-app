@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { T, font, fmt, Badge, Stat, Bar, Btn, DateRangeFilter } from "./p2_helpers.jsx";
+import { T, font, fmt, Badge, Stat, Bar, Btn, DateRangeFilter, isUnassignedRecord, filterUnassignedRecords, countOccupiedBeds, getDisplayName } from "./p2_helpers.jsx";
 
 /* ═══════════════════════════════════════════════════════════
    PROPERTY DETAIL VIEW
@@ -100,19 +100,23 @@ function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom }) 
       </div>
       {open && (
         <div style={{ borderTop:`1px solid ${T.border}`, paddingBottom:12 }}>
-          {room.students.map(s => (
-            <div key={s.id} onClick={()=>s.status!=="VACANT"&&s.status!=="VACATED"&&onStudentClick&&onStudentClick(s,room,propName)}
-              className="pn-room-students"
-              style={{ display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",gap:12,padding:"10px 20px",
-                borderBottom:`1px solid ${T.border}20`,alignItems:"center",cursor:s.status!=="VACANT"&&s.status!=="VACATED"?"pointer":"default",transition:"background .15s" }}
-              onMouseEnter={e=>{if(s.status!=="VACANT"&&s.status!=="VACATED")e.currentTarget.style.background=T.hover}}
-              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-              <div style={{ fontSize:13,color:s.status==="VACANT"||s.status==="VACATED"?T.muted:T.text,fontWeight:s.status==="VACANT"?400:600,fontStyle:s.status==="VACANT"?"italic":"normal" }}>{s.name}</div>
-              <div style={{ fontSize:12,color:T.subtle,fontFamily:"'IBM Plex Mono',monospace" }}>{s.status==="VACANT"?"—":`$${s.paid} paid${s.balance>0?` · $${s.balance} bal`:''}`}</div>
-              <div style={{ fontSize:11,color:T.muted }}>{s.date||"—"}</div>
-              <div style={{ justifySelf: "end" }}><Badge status={s.status} /></div>
-            </div>
-          ))}
+          {room.students.map(s => {
+            const displayName = getDisplayName(s);
+            const isClickable = s.status!=="VACANT"&&s.status!=="VACATED"&&!isUnassignedRecord(s);
+            return (
+              <div key={s.id} onClick={()=>isClickable&&onStudentClick&&onStudentClick(s,room,propName)}
+                className="pn-room-students"
+                style={{ display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",gap:12,padding:"10px 20px",
+                  borderBottom:`1px solid ${T.border}20`,alignItems:"center",cursor:isClickable?"pointer":"default",transition:"background .15s" }}
+                onMouseEnter={e=>{if(isClickable)e.currentTarget.style.background=T.hover}}
+                onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                <div style={{ fontSize:13,color:s.status==="VACANT"||s.status==="VACATED"||isUnassignedRecord(s)?T.muted:T.text,fontWeight:s.status==="VACANT"||isUnassignedRecord(s)?400:600,fontStyle:s.status==="VACANT"||isUnassignedRecord(s)?"italic":"normal" }}>{displayName}</div>
+                <div style={{ fontSize:12,color:T.subtle,fontFamily:"'IBM Plex Mono',monospace" }}>{s.status==="VACANT"||isUnassignedRecord(s)?"—":`$${s.paid} paid${s.balance>0?` · $${s.balance} bal`:''}`}</div>
+                <div style={{ fontSize:11,color:T.muted }}>{s.date||"—"}</div>
+                <div style={{ justifySelf: "end" }}><Badge status={s.status} /></div>
+              </div>
+            );
+          })}
           <div style={{ padding:"14px 20px", background:T.surface, borderTop:`1px solid ${T.border}40`, marginTop:4 }}>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:isAdmin?10:0 }}>
               <div>
@@ -209,11 +213,16 @@ export function Students({ props, onAddStudent, onStudentClick }) {
               <div style={{ padding:32,textAlign:"center",color:T.muted,fontSize:13 }}>No students match your search criteria</div>
             ) : filtered.map(s => {
               const ac = T.prop[s.property] || { accent: T.gold };
+              const isClickable = !isUnassignedRecord(s) && s.status !== "VACANT" && s.status !== "VACATED";
               return (
-                <div key={s.id} style={{ display:"grid",gridTemplateColumns:"2fr 1.2fr 1fr 1fr 1fr 1fr",padding:"12px 20px",
-                  borderBottom:`1px solid ${T.border}15`,alignItems:"center",transition:"background .15s",minWidth:600 }}
-                  onMouseEnter={e=>e.currentTarget.style.background=T.hover} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                  <div style={{ fontSize:13,fontWeight:600,color:T.text }}>{s.name}</div>
+                <div key={s.id} 
+                  onClick={() => isClickable && onStudentClick && onStudentClick(s, {no:s.room, rent:s.rent, id:s.room_id}, s.property)}
+                  style={{ display:"grid",gridTemplateColumns:"2fr 1.2fr 1fr 1fr 1fr 1fr",padding:"12px 20px",
+                  borderBottom:`1px solid ${T.border}15`,alignItems:"center",transition:"background .15s",minWidth:600,
+                  cursor: isClickable ? "pointer" : "default" }}
+                  onMouseEnter={e=>{if(isClickable)e.currentTarget.style.background=T.hover}} 
+                  onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  <div style={{ fontSize:13,fontWeight:600,color:T.text }}>{getDisplayName(s)}</div>
                   <div style={{ display:"flex",alignItems:"center",gap:6 }}>
                     <div style={{ width:6,height:6,borderRadius:"50%",background:ac.accent }} />
                     <span style={{ fontSize:12,color:T.subtle }}>{s.property}</span>
@@ -233,9 +242,12 @@ export function Students({ props, onAddStudent, onStudentClick }) {
           <div style={{ padding:24,textAlign:"center",color:T.muted,background:T.card,borderRadius:12 }}>No students match your search criteria</div>
         ) : filtered.map(s => {
           const ac = T.prop[s.property] || { accent: T.gold };
+          const isClickable = !isUnassignedRecord(s) && s.status !== "VACANT" && s.status !== "VACATED";
           return (
-            <div key={s.id+"m"} onClick={()=>onStudentClick&&onStudentClick(s,{no:s.room,rent:s.rent},s.property)} style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:14,borderLeft:`3px solid ${ac.accent}`,cursor:"pointer" }}>
-              <div style={{ fontSize:14,fontWeight:700,color:T.text,marginBottom:4 }}>{s.name}</div>
+            <div key={s.id+"m"} 
+              onClick={()=>isClickable&&onStudentClick&&onStudentClick(s,{no:s.room,rent:s.rent,id:s.room_id},s.property)} 
+              style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:14,borderLeft:`3px solid ${ac.accent}`,cursor:isClickable?"pointer":"default" }}>
+              <div style={{ fontSize:14,fontWeight:700,color:T.text,marginBottom:4 }}>{getDisplayName(s)}</div>
               <div style={{ fontSize:12,color:T.subtle,marginBottom:8 }}>{s.property} · {s.room}</div>
               <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr auto",gap:6,alignItems:"center" }}>
                 <div><span style={{color:T.muted,fontSize:11}}>Rent: </span><span style={{color:T.subtle,fontSize:12,fontFamily:"'IBM Plex Mono',monospace"}}>{fmt(s.rent)}</span></div>

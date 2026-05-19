@@ -1,0 +1,63 @@
+═══════════════════════════════════════════════════════════
+CRITICAL: RUN THIS SQL IN SUPABASE FIRST!
+═══════════════════════════════════════════════════════════
+
+INSTRUCTIONS:
+1. Open Supabase Dashboard
+2. Go to SQL Editor
+3. Copy the SQL below
+4. Paste and click "Run"
+5. Verify success message appears
+
+═══════════════════════════════════════════════════════════
+SQL SCRIPT:
+═══════════════════════════════════════════════════════════
+
+-- Add updated_at column if it doesn't exist
+ALTER TABLE students 
+ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
+
+-- Create index for updated_at queries
+CREATE INDEX IF NOT EXISTS idx_students_updated_at 
+ON students(updated_at);
+
+-- Add comment
+COMMENT ON COLUMN students.updated_at IS 
+'Timestamp of last update to student record. Used for audit trails and sync.';
+
+-- Verify column was added
+SELECT 
+  CASE 
+    WHEN EXISTS (
+      SELECT 1 FROM information_schema.columns 
+      WHERE table_name = 'students' 
+      AND column_name = 'updated_at'
+    ) 
+    THEN '✅ updated_at column added successfully'
+    ELSE '❌ updated_at column missing'
+  END as status;
+
+═══════════════════════════════════════════════════════════
+EXPECTED RESULT:
+═══════════════════════════════════════════════════════════
+
+You should see:
+✅ updated_at column added successfully
+
+If you see this, you're ready to test!
+
+═══════════════════════════════════════════════════════════
+WHAT THIS FIXES:
+═══════════════════════════════════════════════════════════
+
+This SQL script adds the missing 'updated_at' column to the 
+students table. Without this column, inline editing of student 
+names, phone numbers, and IDs will fail with an error.
+
+After running this SQL, you'll be able to:
+- Edit student names by clicking on them
+- Edit phone numbers inline
+- Edit ID numbers inline
+- All changes will be tracked with timestamps
+
+═══════════════════════════════════════════════════════════

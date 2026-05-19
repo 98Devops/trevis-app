@@ -275,21 +275,78 @@ export function Calendar({ props, onStudentClick }) {
         </div>
       </div>
 
-      {/* Calendar Mobile */}
-      <div className="pn-calendar-mobile" style={{ display: "none", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-        {calendarData.cells.filter(c => c.dayNum && (c.hasPayments || c.hasCheckins || c.hasObligations)).map(cell => (
-          <div key={cell.index + "m"} onClick={() => handleDayClick(cell)}
-            style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, cursor: "pointer" }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: cell.isToday ? T.gold : T.text, marginBottom: 8 }}>
-              {cell.date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+      {/* Calendar Mobile - Full Grid (Identical to Desktop) */}
+      <div className="pn-calendar-mobile" style={{ display: "none", background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, overflow: "hidden", marginBottom: 20 }}>
+        {/* Week headers */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", background: T.surface, borderBottom: `1px solid ${T.border}` }}>
+          {weekDays.map(day => (
+            <div key={day} style={{ padding: "8px 4px", textAlign: "center", fontSize: 9, color: T.muted, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 600 }}>
+              {day}
             </div>
-            <div style={{ display: "flex", gap: 12, fontSize: 11, flexWrap: "wrap" }}>
-              {cell.hasPayments && <span style={{ color: T.green }}>● {cell.paymentCount} payments</span>}
-              {cell.hasObligations && <span style={{ color: T.red }}>● {cell.obligationCount} overdue</span>}
-              {cell.hasCheckins && <span style={{ color: T.gold }}>● {cell.checkinCount} check-ins</span>}
+          ))}
+        </div>
+        
+        {/* Calendar cells - Mobile responsive */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
+          {calendarData.cells.map(cell => (
+            <div key={cell.index + "m"} onClick={() => handleDayClick(cell)}
+              style={{ 
+                minHeight: 44, // Touch target minimum
+                padding: 4, 
+                border: `1px solid ${T.border}20`, 
+                cursor: cell.dayNum ? "pointer" : "default",
+                background: cell.isToday ? `${T.gold}15` : 
+                           (cell.hasPayments || cell.hasCheckins || cell.hasObligations) ? `${T.blue}08` :
+                           cell.dayNum ? T.card : T.surface,
+                borderLeft: cell.isToday ? `3px solid ${T.gold}` : `1px solid ${T.border}20`,
+                transition: "all .15s",
+                position: "relative",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between"
+              }}
+              onTouchStart={e => cell.dayNum && (e.currentTarget.style.background = cell.isToday ? `${T.gold}20` : T.hover)}
+              onTouchEnd={e => cell.dayNum && (e.currentTarget.style.background = 
+                cell.isToday ? `${T.gold}15` : 
+                (cell.hasPayments || cell.hasCheckins || cell.hasObligations) ? `${T.blue}08` : T.card
+              )}>
+              
+              {cell.dayNum && (
+                <>
+                  {/* Day number */}
+                  <div style={{ 
+                    fontSize: 11, 
+                    fontWeight: cell.isToday ? 700 : 600, 
+                    color: cell.isToday ? T.gold : T.text, 
+                    textAlign: "center",
+                    lineHeight: 1
+                  }}>
+                    {cell.dayNum}
+                  </div>
+                  
+                  {/* Event dots - Mobile sized */}
+                  <div style={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center", alignItems: "flex-end", flex: 1 }}>
+                    {cell.hasPayments && (
+                      <div style={{ 
+                        width: 5, height: 5, borderRadius: "50%", background: T.green
+                      }} title={`${cell.paymentCount} payments`} />
+                    )}
+                    {cell.hasObligations && (
+                      <div style={{ 
+                        width: 5, height: 5, borderRadius: "50%", background: T.red
+                      }} title={`${cell.obligationCount} overdue`} />
+                    )}
+                    {cell.hasCheckins && (
+                      <div style={{ 
+                        width: 5, height: 5, borderRadius: "50%", background: T.gold
+                      }} title={`${cell.checkinCount} check-ins`} />
+                    )}
+                  </div>
+                </>
+              )}
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
       {/* Upcoming Events Strip */}
       {upcomingEvents.length > 0 && (
@@ -348,6 +405,44 @@ export function Calendar({ props, onStudentClick }) {
           onStudentClick={onStudentClick}
         />
       )}
+
+      {/* Mobile Day Panel - Bottom Sheet */}
+      {selectedDay && (
+        <MobileDayPanel 
+          dayData={dayData} 
+          onClose={() => setSelectedDay(null)} 
+          onStudentClick={onStudentClick}
+        />
+      )}
+
+      {/* Responsive CSS */}
+      <style>{`
+        /* Desktop calendar visible by default */
+        .pn-calendar-desktop { display: block; }
+        .pn-calendar-mobile { display: none !important; }
+        .pn-day-panel-inner { display: block; }
+        .pn-mobile-day-panel { display: none !important; }
+        .pn-upcoming-desktop { display: flex; }
+        .pn-upcoming-mobile { display: none !important; }
+
+        /* Mobile breakpoint: ≤768px */
+        @media (max-width: 768px) {
+          .pn-calendar-desktop { display: none !important; }
+          .pn-calendar-mobile { display: block !important; }
+          .pn-day-panel-inner { display: none !important; }
+          .pn-mobile-day-panel { display: block !important; }
+          .pn-upcoming-desktop { display: none !important; }
+          .pn-upcoming-mobile { display: flex !important; }
+        }
+
+        /* Tablet breakpoint: 769px-1024px */
+        @media (min-width: 769px) and (max-width: 1024px) {
+          .pn-calendar-desktop { display: block; }
+          .pn-calendar-mobile { display: none !important; }
+          .pn-day-panel-inner { display: block; }
+          .pn-mobile-day-panel { display: none !important; }
+        }
+      `}</style>
     </div>
   );
 }
@@ -370,11 +465,12 @@ function DayPanel({ dayData, onClose, onStudentClick }) {
     <div onClick={onClose} style={{ 
       position: "fixed", 
       inset: 0, 
-      background: "rgba(0,0,0,.6)", 
+      background: "rgba(0,0,0,.4)", 
       display: "flex", 
       alignItems: "center", 
       justifyContent: "center", 
-      zIndex: 1000 
+      zIndex: 1000,
+      backdropFilter: "blur(4px)"
     }}>
       <div onClick={e => e.stopPropagation()} className="pn-day-panel-inner"
         style={{ 
@@ -385,7 +481,8 @@ function DayPanel({ dayData, onClose, onStudentClick }) {
           width: 480, 
           maxWidth: "90%", 
           maxHeight: "80vh", 
-          overflowY: "auto" 
+          overflowY: "auto",
+          boxShadow: "0 20px 40px rgba(0,0,0,.15)"
         }}>
         
         {/* Header */}
@@ -483,6 +580,187 @@ function DayPanel({ dayData, onClose, onStudentClick }) {
             No events on this date.
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* Mobile Day Panel Component - Bottom Sheet */
+function MobileDayPanel({ dayData, onClose, onStudentClick }) {
+  const [startY, setStartY] = useState(0);
+  const [currentY, setCurrentY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const dateLabel = dayData.date?.toLocaleDateString("en-US", { 
+    weekday: "long", 
+    month: "long", 
+    day: "numeric" 
+  });
+
+  const handleTouchStart = (e) => {
+    setStartY(e.touches[0].clientY);
+    setCurrentY(e.touches[0].clientY);
+    setIsDragging(true);
+  };
+
+  const handleTouchMove = (e) => {
+    if (!isDragging) return;
+    setCurrentY(e.touches[0].clientY);
+  };
+
+  const handleTouchEnd = () => {
+    if (!isDragging) return;
+    const deltaY = currentY - startY;
+    
+    // Close if swiped down more than 100px
+    if (deltaY > 100) {
+      onClose();
+    }
+    
+    setIsDragging(false);
+    setStartY(0);
+    setCurrentY(0);
+  };
+
+  const totalPayments = dayData.payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
+  return (
+    <div onClick={onClose} style={{ 
+      position: "fixed", 
+      inset: 0, 
+      background: "rgba(0,0,0,.4)", 
+      display: "flex", 
+      alignItems: "flex-end", 
+      justifyContent: "center", 
+      zIndex: 1000,
+      backdropFilter: "blur(4px)"
+    }}>
+      <div 
+        onClick={e => e.stopPropagation()} 
+        className="pn-mobile-day-panel"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{ 
+          background: T.card, 
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
+          width: "100%", 
+          height: "70vh",
+          overflowY: "auto",
+          transform: isDragging ? `translateY(${Math.max(0, currentY - startY)}px)` : 'translateY(0)',
+          transition: isDragging ? 'none' : 'transform 0.3s ease-out',
+          animation: 'slideUp 0.3s ease-out',
+          boxShadow: "0 -10px 30px rgba(0,0,0,.15)"
+        }}>
+        
+        {/* Drag Handle */}
+        <div style={{ 
+          display: "flex", 
+          justifyContent: "center", 
+          padding: "12px 0 8px 0",
+          borderBottom: `1px solid ${T.border}20`
+        }}>
+          <div style={{ 
+            width: 40, 
+            height: 4, 
+            background: T.muted, 
+            borderRadius: 2 
+          }} />
+        </div>
+
+        <div style={{ padding: "16px 20px" }}>
+          {/* Header */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: T.text, marginBottom: 4 }}>{dateLabel}</div>
+            <div style={{ fontSize: 12, color: T.muted }}>
+              {dayData.payments.length} payments · {dayData.checkins.length} check-ins · {dayData.obligations.length} obligations
+            </div>
+          </div>
+
+          {/* Payments */}
+          {dayData.payments.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: T.green, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                <span>💰 PAYMENTS ({dayData.payments.length})</span>
+                {totalPayments > 0 && <span style={{ fontSize: 11, color: T.muted }}>({fmt(totalPayments)})</span>}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {dayData.payments.map((payment, i) => (
+                  <div key={i} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{payment.student}</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: T.green, fontFamily: "'IBM Plex Mono',monospace" }}>
+                        {fmt(payment.amount)}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12, color: T.muted }}>{payment.property} — Room {payment.room}</div>
+                    <div style={{ fontSize: 11, color: T.subtle, marginTop: 4 }}>{payment.method}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Check-ins */}
+          {dayData.checkins.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: T.gold, marginBottom: 12 }}>🏠 CHECK-INS ({dayData.checkins.length})</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {dayData.checkins.map((checkin, i) => (
+                  <div key={i} 
+                    onClick={() => onStudentClick && onStudentClick(
+                      { name: checkin.student, date: checkin.date }, 
+                      { no: checkin.room }, 
+                      checkin.property
+                    )}
+                    style={{ 
+                      background: T.surface, 
+                      border: `1px solid ${T.border}`, 
+                      borderRadius: 12, 
+                      padding: 14, 
+                      cursor: "pointer",
+                      minHeight: 44 // Touch target
+                    }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: T.text, marginBottom: 4 }}>{checkin.student}</div>
+                    <div style={{ fontSize: 12, color: T.muted }}>{checkin.property} — Room {checkin.room}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Obligations */}
+          {dayData.obligations.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: T.red, marginBottom: 12 }}>
+                ⚠ OBLIGATIONS ({dayData.obligations.length})
+              </div>
+              <div style={{ fontSize: 12, color: T.subtle, marginBottom: 12 }}>
+                Monthly rent obligations due
+              </div>
+            </div>
+          )}
+
+          {/* Empty state */}
+          {dayData.payments.length === 0 && dayData.checkins.length === 0 && dayData.obligations.length === 0 && (
+            <div style={{ padding: 40, textAlign: "center", color: T.muted, fontSize: 14 }}>
+              No events on this date.
+            </div>
+          )}
+        </div>
+
+        {/* Slide up animation */}
+        <style>{`
+          @keyframes slideUp {
+            from {
+              transform: translateY(100%);
+            }
+            to {
+              transform: translateY(0);
+            }
+          }
+        `}</style>
       </div>
     </div>
   );

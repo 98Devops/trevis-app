@@ -59,8 +59,7 @@
    - Student balance recalculated
    - Status changes to OVERDUE/PARTIAL if needed
    - Student appears in attention required
-   - Property cards update arrears count
-   - All dashboards refresh
+   - Property cards update arrears count   - All dashboards refresh
 
 ### New Payment Flow
 1. User records new payment

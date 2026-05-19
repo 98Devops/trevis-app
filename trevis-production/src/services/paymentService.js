@@ -76,3 +76,59 @@ export async function deletePayment(paymentId) {
   
   return { data: !error, error };
 }
+
+/**
+ * Update student profile field
+ * @param {string} studentId - UUID of the student
+ * @param {string} field - Field name to update
+ * @param {any} value - New value
+ * @param {string} userId - User performing the update
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function updateStudentField(studentId, field, value, userId) {
+  if (!isConfigured) return { success: false, error: 'Not configured' };
+  
+  try {
+    // Validate field is allowed to be updated
+    const allowedFields = ['full_name', 'phone', 'national_id', 'emergency_contact_name', 'emergency_contact_phone', 'notes', 'check_in_date'];
+    if (!allowedFields.includes(field)) {
+      return { success: false, error: 'Field not allowed to be updated' };
+    }
+    
+    const { error } = await supabase
+      .from('students')
+      .update({ 
+        [field]: value,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', studentId);
+    
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Recalculate balances and statuses for all students
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function recalculateBalances() {
+  if (!isConfigured) return { success: false, error: 'Not configured' };
+  
+  try {
+    const { error } = await supabase.rpc('recalculate_all_balances');
+    
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}

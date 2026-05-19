@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
-import { T, font, Badge, InputField, SelectField, Btn, fmt, daysSince, daysColor, daysUntilAnniversary } from "./p2_helpers.jsx";
+import { T, font, Badge, InputField, SelectField, Btn, fmt, daysSince, daysColor, daysUntilAnniversary, formatMonth } from "./p2_helpers.jsx";
 import { supabase, isConfigured as sbConfigured } from "../lib/supabase";
 import { useAuth } from "./p1_imports_context.jsx";
+import InlineEditField from "../components/InlineEditField.jsx";
+import { getAvailableRooms, getAllAvailableRooms, executeTransfer, getTransferHistory } from "../services/transferService.js";
 
 /* ═══════════════════════════════════════════════════════════
    LOGIN SCREEN
@@ -282,6 +284,13 @@ export function PaymentModal({ open, onClose, prop, onRecord, user, allProps }) 
   const allStudents = activeProp ? activeProp.rooms.flatMap(r => r.students.filter(s=>s.status!=="VACANT"&&s.status!=="VACATED").map(s => ({ ...s, room: r.no, roomId:r.id, roomRent:r.rent }))) : [];
   const outstanding = allStudents.filter(s => s.status !== "PAID");
 
+  // Check if selected date is in a past month
+  const selectedDate = new Date(form.date);
+  const today = new Date();
+  const isBackdated = selectedDate.getFullYear() < today.getFullYear() || 
+    (selectedDate.getFullYear() === today.getFullYear() && selectedDate.getMonth() < today.getMonth());
+  const backdatedMonth = isBackdated ? formatMonth(form.date) : null;
+
   const handleSubmit = async () => {
     await onRecord(activeProp.name, form.student, {
       amount: Number(form.amount), date: form.date, method: form.method,
@@ -315,6 +324,12 @@ export function PaymentModal({ open, onClose, prop, onRecord, user, allProps }) 
                 <InputField label="Amount ($)" value={form.amount} onChange={v=>upd("amount",v)} type="number" placeholder="e.g. 130" />
                 <InputField label="Date" value={form.date} onChange={v=>upd("date",v)} type="date" />
               </div>
+              {isBackdated && (
+                <div style={{ background:T.amberDim,border:`1px solid ${T.amber}40`,borderRadius:8,padding:"10px 12px",fontSize:12,color:T.amber,display:"flex",alignItems:"center",gap:8 }}>
+                  <span>⚠</span>
+                  <span>Recording payment for <strong>{backdatedMonth}</strong> — historical records will update</span>
+                </div>
+              )}
               <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
                 <SelectField label="Method" value={form.method} onChange={v=>upd("method",v)}
                   options={["Cash","EcoCash","Bank Transfer","Zipit","Swipe"]} />
@@ -343,6 +358,9 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [loadingPayments, setLoadingPayments] = useState(true);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferHistory, setTransferHistory] = useState([]);
+  const [loadingTransfers, setLoadingTransfers] = useState(false);
 
   // Fetch payment history on mount
   useEffect(() => {
@@ -354,15 +372,18 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
       setPaymentHistory(data || []);
       setLoadingPayments(false);
     };
+    
+    const fetchTransferHistory = async () => {
+      if (!student.id) return;
+      setLoadingTransfers(true);
+      const { data } = await getTransferHistory(student.id);
+      setTransferHistory(data || []);
+      setLoadingTransfers(false);
+    };
+    
     fetchPayments();
+    fetchTransferHistory();
   }, [student.id]);
-
-  const handleWhatsApp = () => {
-    if (!student.phone) return;
-    const phone = student.phone.replace(/[^0-9]/g,'');
-    const fullPhone = phone.startsWith('263') ? phone : phone.startsWith('0') ? '263'+phone.slice(1) : '263'+phone;
-    window.open(`https://wa.me/${fullPhone}`, '_blank');
-  };
 
   const handleEditPayment = async (paymentId, field, value) => {
     const { updatePayment } = await import('./p1_imports_context.jsx');
@@ -444,7 +465,21 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
         <button onClick={onClose} style={{ position:"absolute",top:16,right:16,background:"none",border:"none",cursor:"pointer",color:T.muted,fontSize:18 }}>✕</button>
         <div style={{ marginBottom:24 }}>
           <div style={{ fontSize:11,color:ac.accent,textTransform:"uppercase",letterSpacing:"0.12em" }}>{propName} · {room.no}</div>
-          <h2 style={{ fontSize:20,fontWeight:800,color:T.text,margin:"6px 0" }}>{student.name}</h2>
+          {isAdmin ? (
+            <InlineEditField
+              value={student.name}
+              type="text"
+              onSave={async (newValue) => {
+                const { updateStudentField } = await import('../services/paymentService.js');
+                const result = await updateStudentField(student.id, 'full_name', newValue, user?.email || 'system');
+                if (result.success && refresh) refresh();
+                return result;
+              }}
+              style={{ fontSize:20, fontWeight:800, color:T.text, margin:"6px 0" }}
+            />
+          ) : (
+            <h2 style={{ fontSize:20,fontWeight:800,color:T.text,margin:"6px 0" }}>{student.name}</h2>
+          )}
           <Badge status={student.status} />
         </div>
 
@@ -462,17 +497,55 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
 
         {/* Contact & details */}
         <div style={{ display:"flex",flexDirection:"column",gap:6,marginBottom:20 }}>
-          {student.phone && (
+          {student.phone ? (
             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12 }}>
               <span style={{ color:T.muted }}>Phone</span>
-              <span style={{ color:T.text }}>{student.phone}</span>
+              <InlineEditField
+                value={student.phone}
+                type="phone"
+                onSave={async (newValue) => {
+                  const { updateStudentField } = await import('../services/paymentService.js');
+                  const result = await updateStudentField(student.id, 'phone', newValue, user?.email || 'system');
+                  if (result.success && refresh) refresh();
+                  return result;
+                }}
+                style={{ fontSize:12, color:T.text, minWidth:120 }}
+                disabled={!isAdmin}
+              />
+            </div>
+          ) : isAdmin && (
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12 }}>
+              <span style={{ color:T.muted }}>Phone</span>
+              <InlineEditField
+                value=""
+                type="phone"
+                placeholder="Add phone number"
+                onSave={async (newValue) => {
+                  const { updateStudentField } = await import('../services/paymentService.js');
+                  const result = await updateStudentField(student.id, 'phone', newValue, user?.email || 'system');
+                  if (result.success && refresh) refresh();
+                  return result;
+                }}
+                style={{ fontSize:12, color:T.text, minWidth:120 }}
+              />
             </div>
           )}
-          {student.date && (
+          {student.date ? (
             <div>
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12,marginBottom:4 }}>
                 <span style={{ color:T.muted }}>Check-in</span>
-                <span style={{ color:T.text }}>{student.date}</span>
+                <InlineEditField
+                  value={student.date}
+                  type="date"
+                  onSave={async (newValue) => {
+                    const { updateStudentField } = await import('../services/paymentService.js');
+                    const result = await updateStudentField(student.id, 'check_in_date', newValue, user?.email || 'system');
+                    if (result.success && refresh) refresh();
+                    return result;
+                  }}
+                  style={{ fontSize:12, color:T.text, minWidth:100 }}
+                  disabled={!isAdmin}
+                />
               </div>
               {(() => {
                 const daysToAnniversary = daysUntilAnniversary(student.date);
@@ -483,16 +556,90 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
                 );
               })()}
             </div>
+          ) : isAdmin && (
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12 }}>
+              <span style={{ color:T.muted }}>Check-in</span>
+              <InlineEditField
+                value=""
+                type="date"
+                placeholder="Add check-in date"
+                onSave={async (newValue) => {
+                  const { updateStudentField } = await import('../services/paymentService.js');
+                  const result = await updateStudentField(student.id, 'check_in_date', newValue, user?.email || 'system');
+                  if (result.success && refresh) refresh();
+                  return result;
+                }}
+                style={{ fontSize:12, color:T.text, minWidth:100 }}
+              />
+            </div>
           )}
-          {student.idNumber && (
+          {student.idNumber ? (
             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12 }}>
               <span style={{ color:T.muted }}>ID</span>
-              <span style={{ color:T.text }}>{student.idNumber}</span>
+              <InlineEditField
+                value={student.idNumber}
+                type="text"
+                onSave={async (newValue) => {
+                  const { updateStudentField } = await import('../services/paymentService.js');
+                  const result = await updateStudentField(student.id, 'national_id', newValue, user?.email || 'system');
+                  if (result.success && refresh) refresh();
+                  return result;
+                }}
+                style={{ fontSize:12, color:T.text, minWidth:120 }}
+                disabled={!isAdmin}
+              />
+            </div>
+          ) : isAdmin && (
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12 }}>
+              <span style={{ color:T.muted }}>ID</span>
+              <InlineEditField
+                value=""
+                type="text"
+                placeholder="Add ID number"
+                onSave={async (newValue) => {
+                  const { updateStudentField } = await import('../services/paymentService.js');
+                  const result = await updateStudentField(student.id, 'national_id', newValue, user?.email || 'system');
+                  if (result.success && refresh) refresh();
+                  return result;
+                }}
+                style={{ fontSize:12, color:T.text, minWidth:120 }}
+              />
             </div>
           )}
         </div>
 
-        {student.notes && <div style={{ background:T.amberDim,border:`1px solid ${T.amber}30`,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.amber,marginBottom:16 }}>📝 {student.notes}</div>}
+        {student.notes ? (
+          <div style={{ background:T.amberDim,border:`1px solid ${T.amber}30`,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.amber,marginBottom:16 }}>
+            📝 {isAdmin ? (
+              <InlineEditField
+                value={student.notes}
+                type="textarea"
+                onSave={async (newValue) => {
+                  const { updateStudentField } = await import('../services/paymentService.js');
+                  const result = await updateStudentField(student.id, 'notes', newValue, user?.email || 'system');
+                  if (result.success && refresh) refresh();
+                  return result;
+                }}
+                style={{ fontSize:12, color:T.amber, background:'transparent', border:'none' }}
+              />
+            ) : student.notes}
+          </div>
+        ) : isAdmin && (
+          <div style={{ background:T.amberDim,border:`1px solid ${T.amber}30`,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.amber,marginBottom:16 }}>
+            📝 <InlineEditField
+              value=""
+              type="textarea"
+              placeholder="Add notes..."
+              onSave={async (newValue) => {
+                const { updateStudentField } = await import('../services/paymentService.js');
+                const result = await updateStudentField(student.id, 'notes', newValue, user?.email || 'system');
+                if (result.success && refresh) refresh();
+                return result;
+              }}
+              style={{ fontSize:12, color:T.amber, background:'transparent', border:'none' }}
+            />
+          </div>
+        )}
 
         {/* Payment timeline */}
         <div style={{ marginBottom:20 }}>
@@ -518,62 +665,237 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
             <div style={{ color:T.muted,fontSize:12,fontStyle:"italic" }}>No payments recorded</div>
           ) : (
             <>
-              {paymentHistory.map((p) => (
-                <div key={p.id} style={{ borderLeft:`2px solid ${ac.accent}`,paddingLeft:12,marginBottom:12,position:"relative" }}>
-                  {editingPayment === p.id ? (
-                    <EditPaymentInline 
-                      payment={p} 
-                      onSave={async (updated) => {
-                        try {
-                          const { updatePayment, recalculateBalances } = await import('./p1_imports_context.jsx');
-                          const { error: updateError } = await updatePayment(p.id, updated, user?.email || 'system');
-                          if (updateError) throw updateError;
-                          // Recalculate all balances and statuses
-                          await recalculateBalances();
-                          // Refresh payment history
-                          const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
-                          const { data } = await getPaymentsByStudent(student.id);
-                          setPaymentHistory(data || []);
-                          setEditingPayment(null);
-                          // Trigger full app refresh to recalculate everything
-                          if (refresh) refresh();
-                        } catch (err) {
-                          console.error('Edit payment failed:', err);
-                          alert('Failed to save payment: ' + (err.message || 'Unknown error'));
-                        }
-                      }}
-                      onCancel={() => setEditingPayment(null)}
-                    />
-                  ) : confirmDelete === p.id ? (
-                    <div style={{ background:T.redDim,border:`1px solid ${T.red}40`,borderRadius:8,padding:10 }}>
-                      <div style={{ fontSize:12,color:T.red,fontWeight:600,marginBottom:8 }}>Delete payment of {fmt(p.amount)}?</div>
-                      <div style={{ display:"flex",gap:6 }}>
-                        <button onClick={()=>setConfirmDelete(null)} style={{ flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:6,padding:"4px 8px",color:T.text,fontSize:11,cursor:"pointer",fontFamily:font }}>Cancel</button>
-                        <button onClick={()=>handleDeletePayment(p.id)} style={{ flex:1,background:T.red,border:"none",borderRadius:6,padding:"4px 8px",color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:font }}>Delete</button>
+              {(() => {
+                // Group payments by month
+                const grouped = {};
+                paymentHistory.forEach(p => {
+                  const date = new Date(p.payment_date);
+                  const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                  if (!grouped[monthKey]) {
+                    grouped[monthKey] = {
+                      label: formatMonth(p.payment_date),
+                      payments: []
+                    };
+                  }
+                  grouped[monthKey].payments.push(p);
+                });
+
+                // Sort months descending (most recent first)
+                const sortedMonths = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+
+                return sortedMonths.map(monthKey => {
+                  const group = grouped[monthKey];
+                  const monthTotal = group.payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+                  
+                  return (
+                    <div key={monthKey} style={{ marginBottom: 16 }}>
+                      {/* Month header */}
+                      <div style={{ 
+                        background: T.bg, 
+                        borderRadius: 8, 
+                        padding: "8px 12px", 
+                        marginBottom: 8,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center"
+                      }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{group.label}</div>
+                        <div style={{ fontSize: 11, color: T.green, fontWeight: 600 }}>{fmt(monthTotal)}</div>
                       </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-                        <span style={{ fontSize:13,fontWeight:700,color:T.green }}>{fmt(p.amount)}</span>
-                        <div style={{ display:"flex",gap:6,alignItems:"center" }}>
-                          <span style={{ fontSize:11,color:T.muted }}>{p.payment_date}</span>
-                          {isAdmin && (
-                            <div style={{ display:"flex",gap:4 }}>
-                              <button onClick={()=>setEditingPayment(p.id)} style={{ background:"none",border:"none",cursor:"pointer",color:T.blue,fontSize:12,padding:2 }} title="Edit">✏️</button>
-                              <button onClick={()=>setConfirmDelete(p.id)} style={{ background:"none",border:"none",cursor:"pointer",color:T.red,fontSize:12,padding:2 }} title="Delete">🗑️</button>
+
+                      {/* Payments in this month */}
+                      {group.payments.map((p) => (
+                        <div key={p.id} style={{ borderLeft:`2px solid ${ac.accent}`,paddingLeft:12,marginBottom:12,position:"relative" }}>
+                          {editingPayment === p.id ? (
+                            <EditPaymentInline 
+                              payment={p} 
+                              onSave={async (updated) => {
+                                try {
+                                  const { updatePayment, recalculateBalances } = await import('./p1_imports_context.jsx');
+                                  const { error: updateError } = await updatePayment(p.id, updated, user?.email || 'system');
+                                  if (updateError) throw updateError;
+                                  // Recalculate all balances and statuses
+                                  await recalculateBalances();
+                                  // Refresh payment history
+                                  const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
+                                  const { data } = await getPaymentsByStudent(student.id);
+                                  setPaymentHistory(data || []);
+                                  setEditingPayment(null);
+                                  // Trigger full app refresh to recalculate everything
+                                  if (refresh) refresh();
+                                } catch (err) {
+                                  console.error('Edit payment failed:', err);
+                                  alert('Failed to save payment: ' + (err.message || 'Unknown error'));
+                                }
+                              }}
+                              onCancel={() => setEditingPayment(null)}
+                            />
+                          ) : confirmDelete === p.id ? (
+                            <div style={{ background:T.redDim,border:`1px solid ${T.red}40`,borderRadius:8,padding:10 }}>
+                              <div style={{ fontSize:12,color:T.red,fontWeight:600,marginBottom:8 }}>Delete payment of {fmt(p.amount)}?</div>
+                              <div style={{ display:"flex",gap:6 }}>
+                                <button onClick={()=>setConfirmDelete(null)} style={{ flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:6,padding:"4px 8px",color:T.text,fontSize:11,cursor:"pointer",fontFamily:font }}>Cancel</button>
+                                <button onClick={()=>handleDeletePayment(p.id)} style={{ flex:1,background:T.red,border:"none",borderRadius:6,padding:"4px 8px",color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:font }}>Delete</button>
+                              </div>
                             </div>
+                          ) : (
+                            <>
+                              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                                <span style={{ fontSize:13,fontWeight:700,color:T.green }}>
+                                  {isAdmin ? (
+                                    <InlineEditField
+                                      value={p.amount}
+                                      type="number"
+                                      onSave={async (newValue) => {
+                                        try {
+                                          const { updatePayment, recalculateBalances } = await import('./p1_imports_context.jsx');
+                                          const { error: updateError } = await updatePayment(p.id, { amount: Number(newValue) }, user?.email || 'system');
+                                          if (updateError) throw updateError;
+                                          await recalculateBalances();
+                                          const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
+                                          const { data } = await getPaymentsByStudent(student.id);
+                                          setPaymentHistory(data || []);
+                                          if (refresh) refresh();
+                                          return { success: true };
+                                        } catch (err) {
+                                          return { success: false, error: err.message };
+                                        }
+                                      }}
+                                      style={{ fontSize:13, fontWeight:700, color:T.green }}
+                                    />
+                                  ) : (
+                                    fmt(p.amount)
+                                  )}
+                                </span>
+                                <div style={{ display:"flex",gap:6,alignItems:"center" }}>
+                                  <span style={{ fontSize:11,color:T.muted }}>
+                                    {isAdmin ? (
+                                      <InlineEditField
+                                        value={p.payment_date ? p.payment_date.split('T')[0] : ''}
+                                        type="date"
+                                        onSave={async (newValue) => {
+                                          try {
+                                            const { updatePayment, recalculateBalances } = await import('./p1_imports_context.jsx');
+                                            const { error: updateError } = await updatePayment(p.id, { payment_date: newValue }, user?.email || 'system');
+                                            if (updateError) throw updateError;
+                                            await recalculateBalances();
+                                            const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
+                                            const { data } = await getPaymentsByStudent(student.id);
+                                            setPaymentHistory(data || []);
+                                            if (refresh) refresh();
+                                            return { success: true };
+                                          } catch (err) {
+                                            return { success: false, error: err.message };
+                                          }
+                                        }}
+                                        style={{ fontSize:11, color:T.muted }}
+                                      />
+                                    ) : (
+                                      new Date(p.payment_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                                    )}
+                                  </span>
+                                  {isAdmin && (
+                                    <div style={{ display:"flex",gap:4 }}>
+                                      <button onClick={()=>setEditingPayment(p.id)} style={{ background:"none",border:"none",cursor:"pointer",color:T.blue,fontSize:12,padding:2 }} title="Edit">✏️</button>
+                                      <button onClick={()=>setConfirmDelete(p.id)} style={{ background:"none",border:"none",cursor:"pointer",color:T.red,fontSize:12,padding:2 }} title="Delete">🗑️</button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div style={{ fontSize:11,color:T.subtle }}>
+                                {isAdmin ? (
+                                  <InlineEditField
+                                    value={p.payment_method}
+                                    type="select"
+                                    options={[
+                                      { value: 'Cash', label: 'Cash' },
+                                      { value: 'EcoCash', label: 'EcoCash' },
+                                      { value: 'Bank Transfer', label: 'Bank Transfer' },
+                                      { value: 'Zipit', label: 'Zipit' },
+                                      { value: 'Swipe', label: 'Swipe' }
+                                    ]}
+                                    onSave={async (newValue) => {
+                                      try {
+                                        const { updatePayment } = await import('./p1_imports_context.jsx');
+                                        const { error: updateError } = await updatePayment(p.id, { payment_method: newValue }, user?.email || 'system');
+                                        if (updateError) throw updateError;
+                                        const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
+                                        const { data } = await getPaymentsByStudent(student.id);
+                                        setPaymentHistory(data || []);
+                                        return { success: true };
+                                      } catch (err) {
+                                        return { success: false, error: err.message };
+                                      }
+                                    }}
+                                    style={{ fontSize:11, color:T.subtle, display:'inline' }}
+                                  />
+                                ) : (
+                                  p.payment_method
+                                )}
+                                {p.receipt_number && (
+                                  <>
+                                    {' · #'}
+                                    {isAdmin ? (
+                                      <InlineEditField
+                                        value={p.receipt_number}
+                                        type="text"
+                                        onSave={async (newValue) => {
+                                          try {
+                                            const { updatePayment } = await import('./p1_imports_context.jsx');
+                                            const { error: updateError } = await updatePayment(p.id, { receipt_number: newValue }, user?.email || 'system');
+                                            if (updateError) throw updateError;
+                                            const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
+                                            const { data } = await getPaymentsByStudent(student.id);
+                                            setPaymentHistory(data || []);
+                                            return { success: true };
+                                          } catch (err) {
+                                            return { success: false, error: err.message };
+                                          }
+                                        }}
+                                        style={{ fontSize:11, color:T.subtle, display:'inline' }}
+                                      />
+                                    ) : (
+                                      p.receipt_number
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                              {p.notes && (
+                                <div style={{ fontSize:11,color:T.muted,fontStyle:"italic" }}>
+                                  {isAdmin ? (
+                                    <InlineEditField
+                                      value={p.notes}
+                                      type="text"
+                                      onSave={async (newValue) => {
+                                        try {
+                                          const { updatePayment } = await import('./p1_imports_context.jsx');
+                                          const { error: updateError } = await updatePayment(p.id, { notes: newValue }, user?.email || 'system');
+                                          if (updateError) throw updateError;
+                                          const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
+                                          const { data } = await getPaymentsByStudent(student.id);
+                                          setPaymentHistory(data || []);
+                                          return { success: true };
+                                        } catch (err) {
+                                          return { success: false, error: err.message };
+                                        }
+                                      }}
+                                      style={{ fontSize:11, color:T.muted, fontStyle:'italic' }}
+                                    />
+                                  ) : (
+                                    p.notes
+                                  )}
+                                </div>
+                              )}
+                              <div style={{ fontSize:10,color:T.muted }}>by {p.recorded_by}</div>
+                              {p.edited_by && <div style={{ fontSize:10,color:T.amber }}>edited by {p.edited_by}</div>}
+                            </>
                           )}
                         </div>
-                      </div>
-                      <div style={{ fontSize:11,color:T.subtle }}>{p.payment_method}{p.receipt_number ? ` · #${p.receipt_number}` : ""}</div>
-                      {p.notes && <div style={{ fontSize:11,color:T.muted,fontStyle:"italic" }}>{p.notes}</div>}
-                      <div style={{ fontSize:10,color:T.muted }}>by {p.recorded_by}</div>
-                      {p.edited_by && <div style={{ fontSize:10,color:T.amber }}>edited by {p.edited_by}</div>}
-                    </>
-                  )}
-                </div>
-              ))}
+                      ))}
+                    </div>
+                  );
+                });
+              })()}
               <div style={{ fontSize:11,color:T.muted,marginTop:12,paddingTop:12,borderTop:`1px solid ${T.border}30` }}>
                 Total paid all time: {fmt(paymentHistory.reduce((sum,p)=>sum+(p.amount||0),0))} across {paymentHistory.length} payment{paymentHistory.length !== 1 ? 's' : ''}
               </div>
@@ -581,16 +903,37 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
           )}
         </div>
 
+        {/* Transfer History */}
+        {transferHistory.length > 0 && (
+          <div style={{ marginBottom:20 }}>
+            <div style={{ fontSize:13,fontWeight:700,color:T.text,marginBottom:12 }}>Transfer History</div>
+            {transferHistory.map((transfer) => (
+              <div key={transfer.id} style={{ borderLeft:`2px solid ${T.blue}`,paddingLeft:12,marginBottom:12 }}>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                  <span style={{ fontSize:12,fontWeight:600,color:T.text }}>
+                    {transfer.fromPropertyName} {transfer.fromRoomNumber} → {transfer.toPropertyName} {transfer.toRoomNumber}
+                  </span>
+                  <span style={{ fontSize:11,color:T.muted }}>
+                    {new Date(transfer.transferDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </span>
+                </div>
+                {transfer.reason && <div style={{ fontSize:11,color:T.muted,fontStyle:"italic" }}>{transfer.reason}</div>}
+                <div style={{ fontSize:10,color:T.muted }}>by {transfer.performedByName || transfer.performedBy}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Action buttons — all staff actions */}
         <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
           <Btn accent={ac.accent} onClick={onRecordPay} style={{ width:"100%" }}>+ Record Payment</Btn>
+          {isAdmin && (
+            <Btn accent={T.blue} onClick={() => setShowTransferModal(true)} style={{ width:"100%", color:"#fff" }}>
+              🔄 Transfer Room
+            </Btn>
+          )}
           <div style={{ display:"flex",gap:8 }}>
-            {student.phone && (
-              <Btn accent={T.green} onClick={handleWhatsApp} style={{ flex:1,fontSize:12 }}>
-                💬 WhatsApp
-              </Btn>
-            )}
-            <Btn accent={T.blue} onClick={handlePrintStatement} style={{ flex:1,fontSize:12,color:"#fff" }}>
+            <Btn accent={T.blue} onClick={handlePrintStatement} style={{ width:"100%",fontSize:12,color:"#fff" }}>
               🖨 Print Statement
             </Btn>
           </div>
@@ -610,6 +953,22 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
             </div>
           )}
         </div>
+        
+        {/* Transfer Modal */}
+        {showTransferModal && (
+          <TransferModal 
+            open={showTransferModal}
+            onClose={() => setShowTransferModal(false)}
+            student={student}
+            currentRoom={room}
+            currentProperty={propName}
+            user={user}
+            onTransferComplete={() => {
+              setShowTransferModal(false);
+              if (refresh) refresh();
+            }}
+          />
+        )}
       </div>
     </>
   );
@@ -675,6 +1034,240 @@ function EditPaymentInline({ payment, onSave, onCancel }) {
         <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
           <button onClick={onCancel} disabled={saving} style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 8px", color: T.text, fontSize: 11, cursor: saving ? "not-allowed" : "pointer", fontFamily: font }}>Cancel</button>
           <button onClick={handleSave} disabled={saving} style={{ flex: 1, background: saving ? T.border : T.blue, border: "none", borderRadius: 6, padding: "6px 8px", color: saving ? T.muted : "#fff", fontSize: 11, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer", fontFamily: font }}>{saving ? "Saving..." : "Save"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   TRANSFER MODAL (Multi-step room transfer)
+═══════════════════════════════════════════════════════════ */
+function TransferModal({ open, onClose, student, currentRoom, currentProperty, user, onTransferComplete }) {
+  const [step, setStep] = useState(1);
+  const [selectedProperty, setSelectedProperty] = useState('');
+  const [selectedRoom, setSelectedRoom] = useState('');
+  const [reason, setReason] = useState('');
+  const [availableRooms, setAvailableRooms] = useState([]);
+  const [properties, setProperties] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [transferring, setTransferring] = useState(false);
+
+  // Fetch properties on mount
+  useEffect(() => {
+    const fetchProperties = async () => {
+      if (!open) return;
+      setLoading(true);
+      try {
+        // Try without is_active filter first, then add it if column exists
+        const { data, error } = await supabase
+          .from('properties')
+          .select('id, name')
+          .order('name');
+        
+        if (error) {
+          console.error('Error fetching properties:', error);
+          // Try alternative query without is_active
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from('properties')
+            .select('*')
+            .order('name');
+          
+          if (!fallbackError) {
+            console.log('Fetched properties (fallback):', fallbackData);
+            setProperties(fallbackData || []);
+          }
+        } else {
+          console.log('Fetched properties:', data);
+          setProperties(data || []);
+        }
+      } catch (err) {
+        console.error('Exception fetching properties:', err);
+      }
+      setLoading(false);
+    };
+    
+    fetchProperties();
+  }, [open]);
+
+  // Fetch available rooms when property is selected
+  useEffect(() => {
+    const fetchRooms = async () => {
+      if (!selectedProperty) {
+        setAvailableRooms([]);
+        return;
+      }
+      
+      setLoading(true);
+      try {
+        const property = properties.find(p => p.name === selectedProperty);
+        if (property) {
+          // For same-property transfers, pass student ID to exclude from occupancy count
+          const excludeStudentId = selectedProperty === currentProperty ? student.id : null;
+          const { data } = await getAvailableRooms(property.id, excludeStudentId);
+          // For same-property transfers, exclude the current room
+          const filteredRooms = selectedProperty === currentProperty 
+            ? (data || []).filter(room => room.id !== currentRoom.id)
+            : (data || []);
+          setAvailableRooms(filteredRooms);
+        }
+      } catch (err) {
+        console.error('Error fetching rooms:', err);
+      }
+      setLoading(false);
+    };
+    
+    fetchRooms();
+  }, [selectedProperty, properties, currentProperty, currentRoom.id]);
+
+  const handleTransfer = async () => {
+    if (!selectedRoom || !student.id) return;
+    
+    setTransferring(true);
+    try {
+      const transferRequest = {
+        studentId: student.id,
+        fromRoomId: currentRoom.id,
+        toRoomId: selectedRoom,
+        transferDate: new Date().toISOString().split('T')[0],
+        reason: reason.trim() || null,
+        performedBy: user?.id || null
+      };
+      
+      const result = await executeTransfer(transferRequest);
+      
+      if (result.success) {
+        onTransferComplete();
+      } else {
+        alert('Transfer failed: ' + (result.error || 'Unknown error'));
+      }
+    } catch (err) {
+      console.error('Transfer error:', err);
+      alert('Transfer failed: ' + (err.message || 'Unknown error'));
+    }
+    setTransferring(false);
+  };
+
+  if (!open) return null;
+
+  const selectedRoomData = availableRooms.find(r => r.id === selectedRoom);
+  const steps = ["Property", "Room", "Confirm"];
+  const canNext = step === 1 ? selectedProperty : step === 2 ? selectedRoom : true;
+
+  return (
+    <div style={{ position:"fixed",inset:0,background:"#000000cc",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center" }}>
+      <div className="pn-modal-inner" style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:18,width:500,maxHeight:"90vh",overflow:"auto",padding:0,position:"relative",animation:"fadeIn .3s ease" }}>
+        <div style={{ display:"flex",borderBottom:`1px solid ${T.border}` }}>
+          {steps.map((s,i) => (
+            <div key={s} style={{ flex:1,padding:"14px 0",textAlign:"center",fontSize:11,fontWeight:step===i+1?700:400,
+              color:step===i+1?T.blue:i+1<step?T.green:T.muted,borderBottom:step===i+1?`2px solid ${T.blue}`:"2px solid transparent",
+              background:i+1<step?T.greenDim:"none",transition:"all .2s" }}>
+              {i+1}. {s}
+            </div>
+          ))}
+        </div>
+        <button onClick={onClose} style={{ position:"absolute",top:14,right:16,background:"none",border:"none",cursor:"pointer",color:T.muted,fontSize:18,zIndex:2 }}>✕</button>
+        <div style={{ padding:28 }}>
+          <h3 style={{ color:T.text,fontSize:16,margin:"0 0 8px" }}>Transfer {student.name}</h3>
+          <div style={{ fontSize:12,color:T.muted,marginBottom:20 }}>
+            Current: {currentProperty} · {currentRoom.no}
+          </div>
+
+          {step === 1 && (
+            <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+              <div style={{ fontSize:14,fontWeight:600,color:T.text,marginBottom:8 }}>Select Target Property</div>
+              {loading ? (
+                <div style={{ color:T.muted,fontSize:12,fontStyle:"italic" }}>Loading properties...</div>
+              ) : properties.length === 0 ? (
+                <div style={{ color:T.red,fontSize:12,background:T.redDim,padding:"8px 12px",borderRadius:8 }}>
+                  No properties found. Check database connection.
+                </div>
+              ) : (
+                <>
+                  <div style={{ fontSize:11,color:T.muted,marginBottom:4 }}>
+                    Found {properties.length} properties
+                  </div>
+                  <SelectField 
+                    label="Property" 
+                    value={selectedProperty} 
+                    onChange={v => {setSelectedProperty(v); setSelectedRoom('');}}
+                    options={[
+                      {value:"",label:"— Select property —"},
+                      {value:currentProperty,label:`${currentProperty} (same property)`},
+                      ...properties.filter(p => p.name !== currentProperty).map(p => ({value:p.name,label:p.name}))
+                    ]} 
+                  />
+                </>
+              )}
+            </div>
+          )}
+
+          {step === 2 && (
+            <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+              <div style={{ fontSize:14,fontWeight:600,color:T.text,marginBottom:8 }}>Select Target Room</div>
+              <div style={{ fontSize:12,color:T.muted,marginBottom:12 }}>
+                Property: {selectedProperty}
+              </div>
+              {loading ? (
+                <div style={{ color:T.muted,fontSize:12,fontStyle:"italic" }}>Loading rooms...</div>
+              ) : availableRooms.length === 0 ? (
+                <div style={{ color:T.amber,fontSize:12,background:T.amberDim,padding:"8px 12px",borderRadius:8 }}>
+                  No available rooms in {selectedProperty}
+                </div>
+              ) : (
+                <SelectField 
+                  label="Room" 
+                  value={selectedRoom} 
+                  onChange={setSelectedRoom}
+                  options={[
+                    {value:"",label:"— Select room —"},
+                    ...availableRooms.map(r => ({
+                      value: r.id,
+                      label: `${r.roomNumber} — ${r.availableBeds} bed(s) free — $${r.rentPerBed}/bed`
+                    }))
+                  ]} 
+                />
+              )}
+              <InputField 
+                label="Reason (optional)" 
+                value={reason} 
+                onChange={setReason}
+                placeholder="e.g. Student request, maintenance, etc."
+              />
+            </div>
+          )}
+
+          {step === 3 && (
+            <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+              <div style={{ fontSize:14,fontWeight:600,color:T.text,marginBottom:12 }}>Confirm Transfer</div>
+              {[
+                ["Student", student.name],
+                ["From", `${currentProperty} · ${currentRoom.no}`],
+                ["To", `${selectedProperty} · ${selectedRoomData?.roomNumber}`],
+                ["New Rent", `$${selectedRoomData?.rentPerBed}/month`],
+                ["Reason", reason || "—"]
+              ].map(([k,v])=>(
+                <div key={k} style={{ display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${T.border}20` }}>
+                  <span style={{ fontSize:12,color:T.muted }}>{k}</span>
+                  <span style={{ fontSize:12,color:T.text,fontWeight:600 }}>{v}</span>
+                </div>
+              ))}
+              {selectedRoomData && selectedRoomData.rentPerBed !== currentRoom.rent && (
+                <div style={{ background:T.amberDim,border:`1px solid ${T.amber}40`,borderRadius:8,padding:"10px 12px",fontSize:12,color:T.amber,marginTop:8 }}>
+                  ⚠ Rent will change from ${currentRoom.rent} to ${selectedRoomData.rentPerBed} — current month obligation will be updated
+                </div>
+              )}
+            </div>
+          )}
+
+          <div style={{ display:"flex",justifyContent:"space-between",marginTop:24,gap:12 }}>
+            {step > 1 ? <Btn accent={T.border} style={{color:T.text}} onClick={()=>setStep(s=>s-1)}>← Back</Btn> : <div/>}
+            {step < 3 ? <Btn accent={T.blue} disabled={!canNext || loading} onClick={()=>setStep(s=>s+1)}>Next →</Btn>
+              : <Btn accent={T.green} disabled={transferring} onClick={handleTransfer}>
+                  {transferring ? "Transferring..." : "✓ Confirm Transfer"}
+                </Btn>}
+          </div>
         </div>
       </div>
     </div>

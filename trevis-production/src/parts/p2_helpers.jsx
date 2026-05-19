@@ -22,6 +22,52 @@ export const T = {
 export const font = "'Sora','IBM Plex Mono',sans-serif";
 
 /* ═══════════════════════════════════════════════════════════
+   UNASSIGNED RECORD UTILITIES
+   Sprint 5: Handle UNASSIGNED records as empty beds, not ghost students
+═══════════════════════════════════════════════════════════ */
+
+/**
+ * Check if a student record is an UNASSIGNED placeholder
+ * @param {Object} student - Student record
+ * @returns {boolean} - True if this is an UNASSIGNED record
+ */
+export function isUnassignedRecord(student) {
+  if (!student || !student.name) return false;
+  return student.name.startsWith('UNASSIGNED-') || student.name.startsWith('UNASSIGNED ');
+}
+
+/**
+ * Filter out UNASSIGNED records from student arrays
+ * @param {Array} students - Array of student records
+ * @returns {Array} - Filtered array without UNASSIGNED records
+ */
+export function filterUnassignedRecords(students) {
+  if (!Array.isArray(students)) return [];
+  return students.filter(student => !isUnassignedRecord(student));
+}
+
+/**
+ * Count occupied beds including UNASSIGNED records (for capacity calculations)
+ * @param {Array} students - Array of student records
+ * @returns {number} - Count of occupied beds including UNASSIGNED
+ */
+export function countOccupiedBeds(students) {
+  if (!Array.isArray(students)) return 0;
+  return students.filter(student => student.status !== 'VACATED').length;
+}
+
+/**
+ * Get display name for UNASSIGNED records
+ * @param {Object} student - Student record
+ * @returns {string} - Display name ("Empty bed" for UNASSIGNED, original name otherwise)
+ */
+export function getDisplayName(student) {
+  if (!student) return '';
+  if (isUnassignedRecord(student)) return 'Empty bed';
+  return student.name || '';
+}
+
+/* ═══════════════════════════════════════════════════════════
    CSS KEYFRAMES (injected once)
 ═══════════════════════════════════════════════════════════ */
 export const globalCSS = `
@@ -199,11 +245,12 @@ export function buildProps(rawProperties) {
 
     const rooms = sortedRooms.map(r => {
       totalBeds += r.bed_capacity;
-      // Include all non-vacant/non-vacated students
+      // Include all non-vacant/non-vacated students (UNASSIGNED records will be cleaned from DB)
       // DB recalculate function may set status to PAID/PARTIAL/OVERDUE,
       // so we cannot filter by status === 'ACTIVE' only
       const students = (r.students || [])
         .filter(s => s.status !== 'VACANT' && s.status !== 'VACATED')
+        .filter(s => !s.full_name || !s.full_name.includes('UNASSIGNED')) // Extra safety filter
         .map(s => {
           studentCount++;
           const rent = Number(r.rent_per_bed);
