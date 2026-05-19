@@ -11,6 +11,14 @@ export function Calendar({ props, onStudentClick }) {
 
   // Build calendar data from props
   const calendarData = useMemo(() => {
+    // Defensive programming: ensure props is an array
+    if (!props || !Array.isArray(props)) {
+      console.warn('Calendar: props is not an array:', props);
+      return { cells: [] };
+    }
+
+    console.log('Calendar: Processing calendar data for', props.length, 'properties');
+
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const firstDay = new Date(year, month, 1);
@@ -23,62 +31,120 @@ export function Calendar({ props, onStudentClick }) {
     const newObligationDots = {};
     const newCheckinDots = {};
 
-    // Process all properties for calendar events
-    props.forEach(property => {
-      property.rooms.forEach(room => {
-        room.students.forEach(student => {
-          if (student.status === "VACANT" || student.status === "VACATED") return;
+    try {
+      // Process all properties for calendar events
+      props.forEach(property => {
+        if (!property || !property.rooms || !Array.isArray(property.rooms)) {
+          console.warn('Calendar: Invalid property structure:', property);
+          return;
+        }
+        
+        property.rooms.forEach(room => {
+          if (!room || !room.students || !Array.isArray(room.students)) {
+            console.warn('Calendar: Invalid room structure:', room);
+            return;
+          }
+          
+          room.students.forEach(student => {
+            if (!student || student.status === "VACANT" || student.status === "VACATED") return;
 
-          // Check-ins
-          if (student.date && student.date !== "—") {
-            const checkinDate = new Date(student.date);
-            if (checkinDate.getFullYear() === year && checkinDate.getMonth() === month) {
-              const dayKey = checkinDate.getDate();
-              if (!newCheckinDots[dayKey]) newCheckinDots[dayKey] = [];
-              newCheckinDots[dayKey].push({
-                student: student.name,
-                property: property.name,
-                room: room.no,
-                date: student.date
+            // Check-ins
+            if (student.date && student.date !== "—") {
+              try {
+                // Handle different date formats that might come from the database
+                let checkinDate;
+                if (typeof student.date === 'string') {
+                  // Try parsing ISO date first, then fallback to other formats
+                  checkinDate = new Date(student.date);
+                  if (isNaN(checkinDate.getTime())) {
+                    // Try parsing as YYYY-MM-DD format
+                    const parts = student.date.split('-');
+                    if (parts.length === 3) {
+                      checkinDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                    }
+                  }
+                } else {
+                  checkinDate = new Date(student.date);
+                }
+                
+                if (!isNaN(checkinDate.getTime()) && checkinDate.getFullYear() === year && checkinDate.getMonth() === month) {
+                  const dayKey = checkinDate.getDate();
+                  if (dayKey >= 1 && dayKey <= 31) { // Validate day is in valid range
+                    if (!newCheckinDots[dayKey]) newCheckinDots[dayKey] = [];
+                    newCheckinDots[dayKey].push({
+                      student: student.name || 'Unknown Student',
+                      property: property.name || 'Unknown Property',
+                      room: room.no || 'Unknown Room',
+                      date: student.date
+                    });
+                  }
+                }
+              } catch (e) {
+                console.warn('Calendar: Invalid check-in date:', student.date, e);
+              }
+            }
+
+            // Payment history
+            if (student.payHistory && Array.isArray(student.payHistory) && student.payHistory.length > 0) {
+              student.payHistory.forEach(payment => {
+                if (!payment || !payment.date) return;
+                
+                try {
+                  // Handle different date formats that might come from the database
+                  let payDate;
+                  if (typeof payment.date === 'string') {
+                    // Try parsing ISO date first, then fallback to other formats
+                    payDate = new Date(payment.date);
+                    if (isNaN(payDate.getTime())) {
+                      // Try parsing as YYYY-MM-DD format
+                      const parts = payment.date.split('-');
+                      if (parts.length === 3) {
+                        payDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                      }
+                    }
+                  } else {
+                    payDate = new Date(payment.date);
+                  }
+                  
+                  if (!isNaN(payDate.getTime()) && payDate.getFullYear() === year && payDate.getMonth() === month) {
+                    const dayKey = payDate.getDate();
+                    if (dayKey >= 1 && dayKey <= 31) { // Validate day is in valid range
+                      if (!newPaymentDots[dayKey]) newPaymentDots[dayKey] = [];
+                      newPaymentDots[dayKey].push({
+                        student: student.name || 'Unknown Student',
+                        property: property.name || 'Unknown Property',
+                        room: room.no || 'Unknown Room',
+                        amount: payment.amount || 0,
+                        method: payment.method || "Cash",
+                        date: payment.date
+                      });
+                    }
+                  }
+                } catch (e) {
+                  console.warn('Calendar: Invalid payment date:', payment.date, e);
+                }
               });
             }
-          }
 
-          // Payment history
-          if (student.payHistory && student.payHistory.length > 0) {
-            student.payHistory.forEach(payment => {
-              const payDate = new Date(payment.date);
-              if (payDate.getFullYear() === year && payDate.getMonth() === month) {
-                const dayKey = payDate.getDate();
-                if (!newPaymentDots[dayKey]) newPaymentDots[dayKey] = [];
-                newPaymentDots[dayKey].push({
-                  student: student.name,
-                  property: property.name,
-                  room: room.no,
-                  amount: payment.amount,
-                  method: payment.method || "Cash",
-                  date: payment.date
-                });
-              }
-            });
-          }
-
-          // Obligations (unpaid balances)
-          const balance = room.rent - student.paid;
-          if (balance > 0) {
-            // Show obligations on the 1st of the month
-            if (!newObligationDots[1]) newObligationDots[1] = [];
-            newObligationDots[1].push({
-              student: student.name,
-              property: property.name,
-              room: room.no,
-              amount: balance,
-              status: student.status
-            });
-          }
+            // Obligations (unpaid balances)
+            const balance = (room.rent || 0) - (student.paid || 0);
+            if (balance > 0) {
+              // Show obligations on the 1st of the month
+              if (!newObligationDots[1]) newObligationDots[1] = [];
+              newObligationDots[1].push({
+                student: student.name || 'Unknown Student',
+                property: property.name || 'Unknown Property',
+                room: room.no || 'Unknown Room',
+                amount: balance,
+                status: student.status || 'UNKNOWN'
+              });
+            }
+          });
         });
       });
-    });
+    } catch (error) {
+      console.error('Calendar: Error processing calendar data:', error);
+    }
 
     // Build 42-cell grid (6 weeks × 7 days)
     const cells = [];
@@ -163,6 +229,26 @@ export function Calendar({ props, onStudentClick }) {
     
     return events;
   }, [currentDate, paymentDots, obligationDots, checkinDots]);
+
+  // Handle loading and empty states
+  if (!props || !Array.isArray(props)) {
+    return (
+      <div style={{ padding: 40, textAlign: "center" }}>
+        <div style={{ fontSize: 16, fontWeight: 600, color: T.text, marginBottom: 8 }}>Calendar</div>
+        <div style={{ fontSize: 13, color: T.muted }}>Loading calendar data...</div>
+      </div>
+    );
+  }
+
+  if (props.length === 0) {
+    return (
+      <div style={{ padding: 40, textAlign: "center" }}>
+        <div style={{ fontSize: 16, fontWeight: 600, color: T.text, marginBottom: 8 }}>Calendar</div>
+        <div style={{ fontSize: 13, color: T.muted }}>No properties available to display calendar events.</div>
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Header */}
@@ -203,7 +289,16 @@ export function Calendar({ props, onStudentClick }) {
       </div>
 
       {/* Calendar Grid - Desktop */}
-      <div className="pn-calendar-desktop" style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, overflow: "hidden", marginBottom: 20 }}>
+      <div className="pn-calendar-desktop" style={{ 
+        background: T.card, 
+        border: `1px solid ${T.border}`, 
+        borderRadius: 16, 
+        overflow: "hidden", 
+        marginBottom: 20,
+        WebkitFontSmoothing: "antialiased",
+        MozOsxFontSmoothing: "grayscale",
+        textRendering: "optimizeLegibility"
+      }}>
         {/* Week headers */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", background: T.surface, borderBottom: `1px solid ${T.border}` }}>
           {weekDays.map(day => (
@@ -214,8 +309,13 @@ export function Calendar({ props, onStudentClick }) {
         </div>
         
         {/* Calendar cells */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
-          {calendarData.cells.map(cell => (
+        <div style={{ 
+          display: "grid", 
+          gridTemplateColumns: "repeat(7, 1fr)",
+          WebkitFontSmoothing: "antialiased",
+          MozOsxFontSmoothing: "grayscale"
+        }}>
+          {calendarData.cells && calendarData.cells.length > 0 ? calendarData.cells.map(cell => (
             <div key={cell.index} onClick={() => handleDayClick(cell)}
               style={{ 
                 minHeight: 90, 
@@ -271,12 +371,32 @@ export function Calendar({ props, onStudentClick }) {
                 </>
               )}
             </div>
-          ))}
+          )) : (
+            // Fallback: render empty calendar grid if no cells
+            Array.from({ length: 42 }, (_, i) => (
+              <div key={`empty-desktop-${i}`} style={{ 
+                minHeight: 90, 
+                padding: 8, 
+                border: `1px solid ${T.border}20`, 
+                background: T.surface 
+              }} />
+            ))
+          )}
         </div>
       </div>
 
       {/* Calendar Mobile - Full Grid (Identical to Desktop) */}
-      <div className="pn-calendar-mobile" style={{ display: "none", background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, overflow: "hidden", marginBottom: 20 }}>
+      <div className="pn-calendar-mobile" style={{ 
+        display: "none", 
+        background: T.card, 
+        border: `1px solid ${T.border}`, 
+        borderRadius: 16, 
+        overflow: "hidden", 
+        marginBottom: 20,
+        WebkitFontSmoothing: "antialiased",
+        MozOsxFontSmoothing: "grayscale",
+        textRendering: "optimizeLegibility"
+      }}>
         {/* Week headers */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", background: T.surface, borderBottom: `1px solid ${T.border}` }}>
           {weekDays.map(day => (
@@ -287,8 +407,13 @@ export function Calendar({ props, onStudentClick }) {
         </div>
         
         {/* Calendar cells - Mobile responsive */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
-          {calendarData.cells.map(cell => (
+        <div style={{ 
+          display: "grid", 
+          gridTemplateColumns: "repeat(7, 1fr)",
+          WebkitFontSmoothing: "antialiased",
+          MozOsxFontSmoothing: "grayscale"
+        }}>
+          {calendarData.cells && calendarData.cells.length > 0 ? calendarData.cells.map(cell => (
             <div key={cell.index + "m"} onClick={() => handleDayClick(cell)}
               style={{ 
                 minHeight: 44, // Touch target minimum
@@ -345,7 +470,17 @@ export function Calendar({ props, onStudentClick }) {
                 </>
               )}
             </div>
-          ))}
+          )) : (
+            // Fallback: render empty calendar grid if no cells
+            Array.from({ length: 42 }, (_, i) => (
+              <div key={`empty-mobile-${i}`} style={{ 
+                minHeight: 44, 
+                padding: 4, 
+                border: `1px solid ${T.border}20`, 
+                background: T.surface 
+              }} />
+            ))
+          )}
         </div>
       </div>
       {/* Upcoming Events Strip */}
@@ -469,8 +604,7 @@ function DayPanel({ dayData, onClose, onStudentClick }) {
       display: "flex", 
       alignItems: "center", 
       justifyContent: "center", 
-      zIndex: 1000,
-      backdropFilter: "blur(4px)"
+      zIndex: 1000
     }}>
       <div onClick={e => e.stopPropagation()} className="pn-day-panel-inner"
         style={{ 
@@ -632,8 +766,7 @@ function MobileDayPanel({ dayData, onClose, onStudentClick }) {
       display: "flex", 
       alignItems: "flex-end", 
       justifyContent: "center", 
-      zIndex: 1000,
-      backdropFilter: "blur(4px)"
+      zIndex: 1000
     }}>
       <div 
         onClick={e => e.stopPropagation()} 
