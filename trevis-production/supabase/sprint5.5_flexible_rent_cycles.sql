@@ -117,25 +117,25 @@ DECLARE
 BEGIN
   -- Loop through all payments that don't have coverage dates
   FOR v_payment IN 
-    SELECT p.id, p.student_id, p.amount, p.date, p.method
+    SELECT p.id, p.student_id, p.amount, p.payment_date, p.payment_method
     FROM payments p
     WHERE p.coverage_start_date IS NULL
-    ORDER BY p.date ASC
+    ORDER BY p.payment_date ASC
   LOOP
     -- Get room rent for this student
-    SELECT r.rent INTO v_room
+    SELECT r.rent_per_bed INTO v_room
     FROM students s
     JOIN rooms r ON s.room_id = r.id
     WHERE s.id = v_payment.student_id;
     
     -- Skip if no room found
-    IF v_room.rent IS NULL THEN
+    IF v_room.rent_per_bed IS NULL THEN
       CONTINUE;
     END IF;
     
     -- Calculate coverage for this payment
     SELECT * INTO v_coverage
-    FROM calculate_coverage(v_room.rent, v_payment.amount, v_payment.date);
+    FROM calculate_coverage(v_room.rent_per_bed, v_payment.amount, v_payment.payment_date);
     
     -- Update payment with coverage data
     UPDATE payments
@@ -159,28 +159,28 @@ BEGIN
   FOR v_student IN 
     SELECT s.id, s.room_id, s.status
     FROM students s
-    WHERE s.status NOT IN ('VACANT', 'VACATED')
+    WHERE s.status NOT IN ('VACATED', 'SUSPENDED')
   LOOP
     -- Get latest payment for this student
     SELECT p.*
     INTO v_latest_payment
     FROM payments p
     WHERE p.student_id = v_student.id
-    ORDER BY p.date DESC, p.created_at DESC
+    ORDER BY p.payment_date DESC, p.created_at DESC
     LIMIT 1;
     
     -- Get room rent
-    SELECT r.rent INTO v_room
+    SELECT r.rent_per_bed INTO v_room
     FROM rooms r
     WHERE r.id = v_student.room_id;
     
     -- Update student with coverage data
-    IF v_latest_payment.id IS NOT NULL AND v_room.rent IS NOT NULL THEN
+    IF v_latest_payment.id IS NOT NULL AND v_room.rent_per_bed IS NOT NULL THEN
       UPDATE students
       SET 
         coverage_start = v_latest_payment.coverage_start_date,
         coverage_end = v_latest_payment.coverage_end_date,
-        daily_rate = ROUND(v_room.rent / 30.0, 2)
+        daily_rate = ROUND(v_room.rent_per_bed / 30.0, 2)
       WHERE id = v_student.id;
     END IF;
   END LOOP;
@@ -191,10 +191,10 @@ END $$;
 CREATE OR REPLACE VIEW student_coverage_status AS
 SELECT 
   s.id,
-  s.name,
+  s.full_name as name,
   p.name as property_name,
-  r.no as room_no,
-  r.rent as monthly_rent,
+  r.room_number as room_no,
+  r.rent_per_bed as monthly_rent,
   s.daily_rate,
   s.coverage_start,
   s.coverage_end,
@@ -214,7 +214,7 @@ SELECT
 FROM students s
 JOIN rooms r ON s.room_id = r.id
 JOIN properties p ON r.property_id = p.id
-WHERE s.status NOT IN ('VACANT', 'VACATED');
+WHERE s.status NOT IN ('VACATED', 'SUSPENDED');
 
 -- STEP 9: Create function to get dashboard KPIs
 CREATE OR REPLACE FUNCTION get_dashboard_kpis()
