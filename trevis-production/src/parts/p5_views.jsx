@@ -23,13 +23,15 @@ export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, o
       const allStudents = prop.rooms.flatMap(r => r.students);
       
       for (const student of allStudents) {
-        if (student.id && student.status === 'ACTIVE') {
+        // Fetch coverage for all students (not just ACTIVE - let classifier decide)
+        if (student.id) {
           try {
             const coverageData = await CoverageDB.getStudentCoverageData(student.id);
-            if (coverageData) {
+            if (coverageData && coverageData.status === 'ACTIVE') {
               // Use statusClassifier to get coverage status - NO CALCULATIONS HERE
               const classification = classifyStudent(coverageData);
               coverageMap.set(student.id, classification);
+              console.log(`Coverage for ${student.id}:`, classification); // Debug log
             }
           } catch (err) {
             console.error(`Failed to fetch coverage for student ${student.id}:`, err);
@@ -37,6 +39,7 @@ export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, o
         }
       }
       
+      console.log(`Fetched coverage for ${coverageMap.size} students`); // Debug log
       setStudentsWithCoverage(coverageMap);
     }
     
@@ -156,7 +159,7 @@ function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom, st
                 <div style={{ fontSize:11,color:T.muted }}>{s.date||"—"}</div>
                 <div style={{ justifySelf: "end", display:"flex", alignItems:"center", gap:8 }}>
                   {/* Phase 4B: Display coverage label next to status badge (DISPLAY ONLY) */}
-                  {coverageLabel && s.status === 'ACTIVE' && (
+                  {coverageLabel && (
                     <span style={{ 
                       fontSize:11, 
                       fontWeight:600,
