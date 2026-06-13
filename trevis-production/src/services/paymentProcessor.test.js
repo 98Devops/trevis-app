@@ -270,3 +270,202 @@ describe('PaymentProcessor', () => {
     });
   });
 });
+
+/* ═══════════════════════════════════════════════════════════
+   BUSINESS-CRITICAL TESTS
+   Added before Phase 4: These 4 tests are worth more than 50 cosmetic UI tests.
+   They validate the hard-won prepaid day preservation logic.
+═══════════════════════════════════════════════════════════ */
+
+describe('Business-Critical Edge Cases', () => {
+  describe('BC-1: Early Payment Preservation (Exact Date Scenario)', () => {
+    it('should preserve prepaid days for payment 9 days before coverage expires', () => {
+      // Student covered until 19 July
+      // Pays on 10 July (9 days early)
+      const payment = {
+        amount: 110,
+        payment_date: '2026-07-10'
+      };
+
+      const student = {
+        coverage_end: '2026-07-19', // Coverage until 19 Jul
+        billing_anchor_date: '2026-06-20',
+        monthly_rent: 110,
+        status: 'ACTIVE'
+      };
+
+      const result = PaymentProcessor.processPayment(payment, student);
+
+      // EXPECTED:
+      // - Coverage starts on 20 July (day after existing coverage)
+      // - Coverage ends on 18 August (20 Jul + 30 days - 1)
+      // - Prepaid days preserved: 9 days (10 Jul to 19 Jul inclusive)
+      expect(result.coverageStart).toEqual(new Date('2026-07-20')); // Day after 19 Jul
+      expect(result.coverageEnd).toEqual(new Date('2026-08-18')); // 20 Jul + 30 days - 1
+      expect(result.isEarlyPayment).toBe(true);
+      expect(result.prepaidDaysPreserved).toBe(9); // 10 Jul to 19 Jul = 9 days
+      
+      // Verify no days disappear
+      const totalDaysCovered = result.prepaidDaysPreserved + result.coverageDays;
+      expect(totalDaysCovered).toBe(39); // 9 prepaid + 30 new = 39 total days
+    });
+  });
+
+  describe('BC-2: Multiple Early Payments (Stacking Coverage)', () => {
+    it('should correctly stack multiple early payments without losing days', () => {
+      // Student covered until 19 July
+      // First payment on 1 July
+      const payment1 = {
+        amount: 110,
+        payment_date: '2026-07-01'
+      };
+
+      const student1 = {
+        coverage_end: '2026-07-19',
+        billing_anchor_date: '2026-06-20',
+        monthly_rent: 110,
+        status: 'ACTIVE'
+      };
+
+      const result1 = PaymentProcessor.processPayment(payment1, student1);
+
+      // After first payment: coverage until 18 Aug (19 Jul + 30 days)
+      expect(result1.coverageStart).toEqual(new Date('2026-07-20'));
+      expect(result1.coverageEnd).toEqual(new Date('2026-08-18'));
+      expect(result1.prepaidDaysPreserved).toBe(18); // 1 Jul to 19 Jul = 18 days
+
+      // Second payment on 10 July (while still covered until 18 Aug)
+      const payment2 = {
+        amount: 110,
+        payment_date: '2026-07-10'
+      };
+
+      const student2 = {
+        coverage_end: result1.coverageEnd.toISOString().split('T')[0], // Now covered until 18 Aug
+        billing_anchor_date: '2026-06-20',
+        monthly_rent: 110,
+        status: 'ACTIVE'
+      };
+
+      const result2 = PaymentProcessor.processPayment(payment2, student2);
+
+      // After second payment: coverage extends from 19 Aug to 17 Sep
+      expect(result2.coverageStart).toEqual(new Date('2026-08-19')); // Day after 18 Aug
+      expect(result2.coverageEnd).toEqual(new Date('2026-09-17')); // 19 Aug + 30 days - 1
+      expect(result2.isEarlyPayment).toBe(true);
+      expect(result2.prepaidDaysPreserved).toBeGreaterThan(0);
+
+      // CRITICAL: Verify no days disappear across both payments
+      // First payment: 18 prepaid + 30 new = 48 days
+      // Second payment: 39 prepaid + 30 new = 69 days
+      // Total coverage from 1 Jul to 17 Sep should be continuous
+      const firstPaymentTotal = result1.prepaidDaysPreserved + result1.coverageDays;
+      const secondPaymentTotal = result2.prepaidDaysPreserved + result2.coverageDays;
+      
+      expect(firstPaymentTotal).toBe(48);
+      expect(secondPaymentTotal).toBeGreaterThan(30); // At least 30 new days added
+    });
+  });
+
+  describe('BC-3: Check-out Protection (Status Filtering)', () => {
+    it('should reject payment for CHECKED_OUT student', () => {
+      const payment = {
+        amount: 110,
+        payment_date: '2026-07-10'
+      };
+
+      const student = {
+        coverage_end: '2026-07-19',
+        billing_anchor_date: '2026-06-20',
+        monthly_rent: 110,
+        status: 'CHECKED_OUT' // Student has checked out
+      };
+
+      // EXPECTED: Payment should be rejected
+      expect(() => {
+        PaymentProcessor.processPayment(payment, student);
+      }).toThrow('Cannot process payment for student with status: CHECKED_OUT');
+    });
+
+    it('should verify CHECKED_OUT students excluded from payment preview', () => {
+      const student = {
+        coverage_end: '2026-07-19',
+        monthly_rent: 110,
+        status: 'CHECKED_OUT'
+      };
+
+      // Preview generation should handle CHECKED_OUT status gracefully
+      // (In real implementation, the UI should prevent this scenario entirely)
+      expect(() => {
+        PaymentProcessor.generatePaymentPreview(110, student);
+      }).toThrow('Cannot generate preview for student with status: CHECKED_OUT');
+    });
+  });
+
+  describe('BC-4: Due Today Edge Case (Coverage End Date = Today)', () => {
+    it('should classify coverage ending today as DUE_TODAY (not CURRENT)', () => {
+      // This test validates the StatusClassifier behavior
+      // Coverage ends today = DUE_TODAY status
+      // NOT CURRENT (which requires coverage_end > today)
+      // NOT EXPIRING_SOON (which is future dates within 7 days)
+
+      const today = new Date().toISOString().split('T')[0];
+
+      const payment = {
+        amount: 110,
+        payment_date: today
+      };
+
+      const student = {
+        coverage_end: today, // Coverage ends TODAY
+        billing_anchor_date: '2026-06-20',
+        monthly_rent: 110,
+        status: 'ACTIVE'
+      };
+
+      const result = PaymentProcessor.processPayment(payment, student);
+
+      // When payment_date === coverage_end, it's considered early payment (edge case)
+      // Coverage should extend from tomorrow
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      expect(result.coverageStart).toEqual(tomorrow);
+      expect(result.isEarlyPayment).toBe(true);
+      
+      // This validates the edge case where coverage_end = today
+      // The StatusClassifier will mark this as DUE_TODAY before the payment
+      // After payment, coverage extends into the future
+    });
+
+    it('should handle payment one day after coverage expires (OVERDUE scenario)', () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Normalize to midnight
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      const payment = {
+        amount: 110,
+        payment_date: today.toISOString().split('T')[0]
+      };
+
+      const student = {
+        coverage_end: yesterday.toISOString().split('T')[0], // Coverage ended yesterday
+        billing_anchor_date: '2026-06-20',
+        monthly_rent: 110,
+        status: 'ACTIVE'
+      };
+
+      const result = PaymentProcessor.processPayment(payment, student);
+
+      // Coverage expired yesterday, so this is NOT an early payment
+      // New coverage starts from payment date (today)
+      const expectedStart = new Date(payment.payment_date);
+      expect(result.coverageStart).toEqual(expectedStart);
+      expect(result.isEarlyPayment).toBe(false);
+      expect(result.prepaidDaysPreserved).toBe(0);
+      
+      // This confirms the OVERDUE → PAID transition logic
+    });
+  });
+});

@@ -192,6 +192,11 @@ export function processPayment(payment, student) {
 export function generatePaymentPreview(amount, student) {
   const { coverage_end, monthly_rent, status } = student;
 
+  // CRITICAL: Only generate preview for ACTIVE students
+  if (status !== 'ACTIVE') {
+    throw new Error(`Cannot generate preview for student with status: ${status}. Only ACTIVE students can receive payments.`);
+  }
+
   // Calculate coverage
   const coverage = RentCycleCalculator.calculateCoverage(amount, monthly_rent);
   
