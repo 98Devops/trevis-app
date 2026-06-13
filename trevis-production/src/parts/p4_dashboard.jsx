@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { T, font, fmt, Badge, Stat, Bar, Btn, formatDateLong } from "./p2_helpers.jsx";
+import * as CoverageDB from "../services/coverageDatabaseService.js";
 
 /* ═══════════════════════════════════════════════════════════
    DASHBOARD VIEW
@@ -8,6 +9,18 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
   const [timeRange, setTimeRange] = useState("month");
   const [sortCol, setSortCol] = useState("name");
   const [sortDir, setSortDir] = useState(1);
+  
+  // Phase 4A: Fetch coverage-based KPIs from database service
+  // READ ONLY - no calculations, display values from coverageDatabaseService
+  const [coverageKPIs, setCoverageKPIs] = useState(null);
+  
+  useEffect(() => {
+    async function fetchKPIs() {
+      const kpis = await CoverageDB.getDashboardKPIs();
+      setCoverageKPIs(kpis);
+    }
+    fetchKPIs();
+  }, [props]); // Refetch when properties change
 
   const totals = useMemo(() => props.reduce((a, p) => ({
     students:  a.students  + p.students,
@@ -47,12 +60,49 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
         </div>
       </div>
 
-      {/* KPI strip */}
-      <div className="pn-kpi-grid" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:20 }}>
-        <Stat label="Total Students" value={totals.students} accent={T.blue} />
-        <Stat label="Collected" value={fmt(totals.collected)} accent={T.green} />
-        <Stat label="Outstanding" value={fmt(totals.expected-totals.collected)} accent={T.red} sub={`${totals.vacantBeds} vacant beds`} />
-        <Stat label="Collection Rate" value={`${rate}%`} sub={`${totals.overdue} need attention`} accent={T.gold} />
+      {/* KPI strip - Phase 4A: Coverage-Based Metrics (READ ONLY) */}
+      <div className="pn-kpi-grid" style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:14, marginBottom:20 }}>
+        {coverageKPIs ? (
+          <>
+            <Stat 
+              label="Total Students" 
+              value={coverageKPIs.total_students} 
+              accent={T.blue} 
+            />
+            <Stat 
+              label="Current" 
+              value={coverageKPIs.current_students} 
+              sub="7+ days remaining"
+              accent="#22C55E" 
+            />
+            <Stat 
+              label="Expiring Soon" 
+              value={coverageKPIs.expiring_soon} 
+              sub="1-7 days remaining"
+              accent="#F59E0B" 
+            />
+            <Stat 
+              label="Overdue" 
+              value={coverageKPIs.overdue_students} 
+              sub="Coverage expired"
+              accent="#EF4444" 
+            />
+            <Stat 
+              label="Collection Rate" 
+              value={`${rate}%`} 
+              sub={`${fmt(coverageKPIs.total_overdue_amount)} arrears`}
+              accent={T.gold} 
+            />
+          </>
+        ) : (
+          // Loading state - show old metrics until KPIs load
+          <>
+            <Stat label="Total Students" value={totals.students} accent={T.blue} />
+            <Stat label="Collected" value={fmt(totals.collected)} accent={T.green} />
+            <Stat label="Outstanding" value={fmt(totals.expected-totals.collected)} accent={T.red} sub={`${totals.vacantBeds} vacant beds`} />
+            <Stat label="Collection Rate" value={`${rate}%`} sub={`${totals.overdue} need attention`} accent={T.gold} />
+          </>
+        )}
       </div>
 
       {/* Quick Actions */}
