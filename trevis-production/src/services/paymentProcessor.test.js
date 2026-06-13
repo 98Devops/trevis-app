@@ -468,4 +468,93 @@ describe('Business-Critical Edge Cases', () => {
       // This confirms the OVERDUE → PAID transition logic
     });
   });
+
+  describe('BC-5: Massive Prepayment (Six Months Ahead)', () => {
+    it('should handle $900 payment (6 months coverage) correctly', () => {
+      // Property manager scenario: Family pays 6 months ahead
+      // Rent = $150/month
+      // Payment = $900 (exactly 6 months)
+      const payment = {
+        amount: 900,
+        payment_date: '2026-07-01'
+      };
+
+      const student = {
+        coverage_end: null, // No existing coverage
+        billing_anchor_date: null,
+        monthly_rent: 150,
+        status: 'ACTIVE'
+      };
+
+      const result = PaymentProcessor.processPayment(payment, student);
+
+      // EXPECTED:
+      // - Daily rate = $150 / 30 = $5/day
+      // - Coverage days = $900 / $5 = 180 days (exactly 6 months)
+      // - Coverage start = 1 July 2026
+      // - Coverage end = 27 December 2026 (1 Jul + 180 days - 1)
+      expect(result.coverageDays).toBe(180);
+      expect(result.coverageStart).toEqual(new Date('2026-07-01'));
+      expect(result.coverageEnd).toEqual(new Date('2026-12-27')); // 1 Jul + 180 days - 1 = 27 Dec
+      expect(result.isEarlyPayment).toBe(false);
+      expect(result.prepaidDaysPreserved).toBe(0);
+      
+      // Verify massive prepayment is treated like a valued customer, not a bug
+      expect(result.coverageDays).toBeGreaterThan(150); // Significantly > 1 month
+    });
+
+    it('should extend coverage correctly after massive prepayment', () => {
+      // After the $900 payment, student pays another $150 before coverage expires
+      // This tests that the system correctly extends from the existing end date
+      const payment = {
+        amount: 150,
+        payment_date: '2026-10-01' // Pays on 1 Oct (still covered until 28 Dec)
+      };
+
+      const student = {
+        coverage_end: '2026-12-27', // Already covered until 27 Dec (from previous $900 payment)
+        billing_anchor_date: '2026-07-01',
+        monthly_rent: 150,
+        status: 'ACTIVE'
+      };
+
+      const result = PaymentProcessor.processPayment(payment, student);
+
+      // EXPECTED:
+      // - This is an early payment (1 Oct < 27 Dec)
+      // - Prepaid days preserved = 87 days (1 Oct to 27 Dec)
+      // - New coverage starts = 28 Dec 2026 (day after existing coverage)
+      // - New coverage ends = 26 Jan 2027 (28 Dec + 30 days - 1)
+      expect(result.isEarlyPayment).toBe(true);
+      expect(result.prepaidDaysPreserved).toBe(87); // 1 Oct to 27 Dec = 87 days
+      expect(result.coverageStart).toEqual(new Date('2026-12-28')); // Day after 27 Dec
+      expect(result.coverageEnd).toEqual(new Date('2027-01-26')); // 28 Dec + 30 days - 1
+      expect(result.coverageDays).toBe(30); // Standard 1-month extension
+      
+      // Verify no days disappear
+      const totalDaysCovered = result.prepaidDaysPreserved + result.coverageDays;
+      expect(totalDaysCovered).toBe(117); // 87 prepaid + 30 new = 117 total days
+    });
+
+    it('should generate correct preview for massive prepayment', () => {
+      const student = {
+        coverage_end: null,
+        monthly_rent: 150,
+        status: 'ACTIVE'
+      };
+
+      const result = PaymentProcessor.generatePaymentPreview(900, student);
+
+      // EXPECTED:
+      // - Preview should show 180 days coverage
+      // - Should NOT be flagged as full month (it's 6 months!)
+      // - Display message should reflect massive prepayment
+      expect(result.coverageDays).toBe(180);
+      expect(result.isFullMonth).toBe(false); // 180 days ≠ 30 days
+      expect(result.displayMessage).toContain('180 days');
+      
+      // Verify the system treats this gracefully
+      expect(result.coverageDays).toBeGreaterThan(150);
+    });
+  });
 });
