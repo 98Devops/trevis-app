@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { T, font, fmt, Badge, Stat, Bar, Btn, DateRangeFilter, isUnassignedRecord, filterUnassignedRecords, countOccupiedBeds, getDisplayName } from "./p2_helpers.jsx";
 import { classifyStudent, getStatusBadgeConfig } from "../services/statusClassifier.js";
 import * as CoverageDB from "../services/coverageDatabaseService.js";
@@ -13,10 +13,16 @@ export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, o
   
   // Phase 4B: Fetch coverage data for all students in this property
   // READ ONLY - no calculations, enriches students with coverage classification
-  const [studentsWithCoverage, setStudentsWithCoverage] = useState(new Map());
+  // Use ref to persist coverage across renders
+  const coverageCache = useRef(new Map());
+  const [coverageVersion, setCoverageVersion] = useState(0);
+  const isFetchingRef = useRef(false);
   
   useEffect(() => {
     async function fetchCoverage() {
+      if (isFetchingRef.current) return; // Prevent duplicate fetches
+      isFetchingRef.current = true;
+      
       const coverageMap = new Map();
       
       // Get all student IDs from this property
@@ -31,22 +37,22 @@ export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, o
               // Use statusClassifier to get coverage status - NO CALCULATIONS HERE
               const classification = classifyStudent(coverageData);
               coverageMap.set(student.id, classification);
-              console.log(`Coverage for ${student.id}:`, classification); // Debug log
             }
           } catch (err) {
-            console.error(`Failed to fetch coverage for student ${student.id}:`, err);
+            // Silently handle errors for individual students
           }
         }
       }
       
-      console.log(`Fetched coverage for ${coverageMap.size} students`); // Debug log
-      setStudentsWithCoverage(coverageMap);
+      coverageCache.current = coverageMap;
+      setCoverageVersion(v => v + 1); // Trigger re-render
+      isFetchingRef.current = false;
     }
     
-    if (prop) {
+    if (prop && prop.rooms) {
       fetchCoverage();
     }
-  }, [prop]);
+  }, [name]); // Only refetch when property name changes
   const pct = prop.expected > 0 ? ((prop.collected / prop.expected)*100).toFixed(1) : "0.0";
   const filtered = prop.rooms.filter(r =>
     !search || r.no.toLowerCase().includes(search.toLowerCase()) ||
@@ -82,13 +88,13 @@ export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, o
       </div>
       {filtered.length === 0 && <div style={{ padding:32,textAlign:"center",color:T.muted,fontSize:13 }}>No rooms match your search</div>}
       <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-        {filtered.map(room => <RoomRow key={room.id} room={room} ac={ac} propName={name} onStudentClick={onStudentClick} isAdmin={isAdmin} onRemoveRoom={onRemoveRoom} studentsWithCoverage={studentsWithCoverage} />)}
+        {filtered.map(room => <RoomRow key={room.id} room={room} ac={ac} propName={name} onStudentClick={onStudentClick} isAdmin={isAdmin} onRemoveRoom={onRemoveRoom} studentsWithCoverage={coverageCache.current} coverageVersion={coverageVersion} />)}
       </div>
     </div>
   );
 }
 
-function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom, studentsWithCoverage }) {
+function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom, studentsWithCoverage, coverageVersion }) {
   const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
