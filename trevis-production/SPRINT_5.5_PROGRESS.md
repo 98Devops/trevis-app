@@ -2,7 +2,7 @@
 
 **Sprint Goal:** Replace calendar-month billing with student-individualized billing cycles based on payment dates.
 
-**Status:** Phase 1 COMPLETE ✅ | Ready for Phase 2
+**Status:** Phase 2 COMPLETE ✅ | Ready for Phase 3
 
 **Last Updated:** 2026-06-06
 
@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-Phase 1 (Database Schema Migration) is complete and validated. All 140 active students now have individualized billing cycle data populated. The system passed comprehensive validation audits with 126/126 full payment validations passing. The application remains fully functional on localhost:5173.
+**Phase 1 & Phase 2 Complete!** Database migration validated (126/126), and JavaScript calculation services created with critical business rules baked in. All 37 unit tests passing. Early payment detection and prepaid day preservation logic implemented and tested.
 
 ---
 
@@ -24,13 +24,133 @@ Phase 1 (Database Schema Migration) is complete and validated. All 140 active st
   - Validation audit passed (126/126 validations)
   - Critical business rules embedded in specification
 
+- ✅ **Phase 2: Coverage Calculation Engine** (100% Complete)
+  - RentCycleCalculator service created and tested
+  - PaymentProcessor service created and tested
+  - All 37 tests passing
+  - Critical business rules implemented (early payment, prepaid day preservation)
+
 ### Upcoming Phases
 
-- ⏳ **Phase 2: Coverage Calculation Engine** (Not Started)
 - ⏳ **Phase 3: Student Status Classification Engine** (Not Started)
 - ⏳ **Phase 4: Dashboard and UI Integration** (Not Started)
 - ⏳ **Phase 5: Arrears Management and Report Updates** (Not Started)
 - ⏳ **Phase 6: Property-Based Testing and Verification** (Not Started)
+
+---
+
+## Phase 2: Coverage Calculation Engine - COMPLETED ✅
+
+### Objectives
+- Create pure calculation services (no database operations)
+- Implement early payment detection and prepaid day preservation
+- Build payment preview functionality  
+- Validate with comprehensive test suite
+
+### Tasks Completed
+
+#### Task 3.1: Create RentCycleCalculator Service ✅
+**File:** `src/services/rentCycleCalculator.js`
+
+**Functions Implemented:**
+- `calculateCoverage(amount, monthlyRent)` - Coverage days, daily rate, payment type
+- `calculateCoveragePeriod(paymentDate, coverageDays)` - Coverage start/end dates
+- `calculateNextDueDate(coverageEnd, billingAnchorDay)` - Next due date calculation
+- `calculateDailyRate(monthlyRent)` - Daily rate (always monthlyRent / 30)
+- `validatePaymentAmount(amount, monthlyRent)` - Payment validation
+- `formatCoveragePeriod(start, end)` - Date formatting for display
+
+**Key Implementation Details:**
+- Uses `Math.round()` for proper rounding (avoids truncation)
+- Daily rate always `monthlyRent / 30` (no calendar month assumptions)
+- Full JSDoc annotations for intellisense
+- Comprehensive error handling with descriptive messages
+
+**Test Coverage:** 23 tests, all passing ✅
+
+#### Task 4.1: Create PaymentProcessor Service ✅  
+**File:** `src/services/paymentProcessor.js`
+
+**CRITICAL BUSINESS RULES IMPLEMENTED:**
+
+1. **Early Payment Detection:**
+```javascript
+if (existingCoverageEnd && paymentDate <= existingCoverageEnd) {
+  // EARLY PAYMENT: Extend from existing coverage
+  coverageStartDate = new Date(existingCoverageEnd);
+  coverageStartDate.setDate(coverageStartDate.getDate() + 1);
+  isEarlyPayment = true;
+  prepaidDaysPreserved = Math.ceil((existingCoverageEnd - paymentDate) / (1000 * 60 * 60 * 24));
+}
+```
+
+2. **Prepaid Day Preservation:**
+- If payment before coverage_end: Start new coverage on (coverage_end + 1)
+- NEVER reset coverage from payment_date when prepaid days exist
+- Returns `prepaidDaysPreserved` count for logging/display
+
+3. **ACTIVE Student Filtering:**
+- Throws error if `student.status !== 'ACTIVE'`
+- Prevents payments for CHECKED_OUT students
+
+4. **Coverage_End_Date as System of Record:**
+- All logic checks existing `coverage_end` first
+- Extends forward only, never backward
+
+**Functions Implemented:**
+- `processPayment(payment, student)` - Core payment processing with early payment logic
+- `generatePaymentPreview(amount, student)` - UI preview with early payment detection
+- `validateEarlyPayment(paymentDate, coverageEnd)` - Early payment validation helper
+
+**Test Coverage:** 14 tests, all passing ✅
+
+#### Optional Tasks 3.2 & 4.2: Unit Tests ✅
+**Files:**
+- `src/services/rentCycleCalculator.test.js` (23 tests)
+- `src/services/paymentProcessor.test.js` (14 tests)
+
+**Test Scenarios Validated:**
+- ✅ Daily rate calculation ($110 / 30 = $3.67)
+- ✅ Full payment = exactly 30 days (not 29)
+- ✅ Partial payment = proportional coverage
+- ✅ Overpayment = extended coverage
+- ✅ Early payment preserves prepaid days
+- ✅ Early payment extends from coverage_end + 1
+- ✅ Normal payment starts from payment_date
+- ✅ ACTIVE vs CHECKED_OUT student handling
+- ✅ Next due date edge cases
+- ✅ Payment preview generation
+- ✅ Error handling and validation
+
+**Test Execution:**
+```
+npm test -- rentCycleCalculator.test.js paymentProcessor.test.js
+
+✅ Test Files  2 passed (2)
+✅ Tests  37 passed (37)
+```
+
+### Phase 2 Validation Results
+
+**All Critical Scenarios Tested:**
+
+1. **Rounding Accuracy** ✅
+   - $110 payment = 30 days (not 29)
+   - Matches database rounding fix from Phase 1
+
+2. **Early Payment Logic** ✅
+   - Payment on June 15, coverage until June 25
+   - New coverage starts June 26 (not June 15)
+   - Preserves 10 prepaid days
+
+3. **ACTIVE Student Filter** ✅
+   - CHECKED_OUT student → Error thrown
+   - ACTIVE student → Payment processed
+
+4. **Payment Preview** ✅
+   - Shows early payment warning
+   - Displays prepaid days preserved
+   - Calculates correct coverage end date
 
 ---
 

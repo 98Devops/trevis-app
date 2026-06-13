@@ -49,19 +49,19 @@ After each phase, verify on localhost:5173 before proceeding:
     - _Requirements: 8.3, 8.4, 8.5_
 
 - [ ] 2. Execute and verify Phase 1 migration
-  - [~] 2.1 Apply migration to local database
+  - [ ] 2.1 Apply migration to local database
     - Run `sprint5.5_rent_cycle_schema.sql` on local Supabase
     - Verify schema changes applied successfully
     - Run verification queries
     - _Requirements: 8.1, 8.2_
 
-  - [~] 2.2 Run data population function
+  - [ ] 2.2 Run data population function
     - Execute `populate_rent_cycle_fields()` function
     - Verify new fields populated for existing students
     - Check sample student records have correct coverage dates
     - _Requirements: 1.1, 1.2, 1.3, 1.4_
 
-  - [~] 2.3 Phase 1 checkpoint - Verify database integrity
+  - [ ] 2.3 Phase 1 checkpoint - Verify database integrity
     - Confirm all existing payment records unchanged
     - Confirm all existing student records unchanged
     - Confirm new fields populated correctly
@@ -74,7 +74,7 @@ After each phase, verify on localhost:5173 before proceeding:
 ### PHASE 2: Coverage Calculation Engine (New Services)
 
 - [ ] 3. Create rent cycle calculator service
-  - [~] 3.1 Create `src/services/rentCycleCalculator.js`
+  - [ ] 3.1 Create `src/services/rentCycleCalculator.js`
     - Implement RentCycleCalculator class with JSDoc annotations
     - Add `calculateCoverage(amount, monthlyRent)` method - returns coverage days, daily rate, payment type
     - Add `calculateCoveragePeriod(paymentDate, coverageDays)` method - returns coverage start/end dates
@@ -92,7 +92,7 @@ After each phase, verify on localhost:5173 before proceeding:
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
 
 - [ ] 4. Create payment processor service
-  - [~] 4.1 Create `src/services/paymentProcessor.js`
+  - [ ] 4.1 Create `src/services/paymentProcessor.js`
     - Implement PaymentProcessor class with JSDoc annotations
     - Constructor accepts RentCycleCalculator instance
     - Add `processPayment(payment, student)` async method - calculates and returns billing data
@@ -111,7 +111,7 @@ After each phase, verify on localhost:5173 before proceeding:
     - _Requirements: 1.1, 1.2, 1.3, 5.4, 5.5_
 
 
-- [~] 5. Phase 2 checkpoint - Verify calculation engines
+- [ ] 5. Phase 2 checkpoint - Verify calculation engines
   - Verify RentCycleCalculator produces correct coverage calculations
   - Verify PaymentProcessor integrates correctly with calculator
   - Run unit tests and ensure all pass
@@ -122,7 +122,7 @@ After each phase, verify on localhost:5173 before proceeding:
 ### PHASE 3: Student Status Classification Engine
 
 - [ ] 6. Create status classifier service
-  - [~] 6.1 Create `src/services/statusClassifier.js`
+  - [ ] 6.1 Create `src/services/statusClassifier.js`
     - Implement StatusClassifier class with JSDoc annotations
     - Add `classifyStatus(coverageEndDate, currentDate)` method
     - Return status: CURRENT (>7 days), EXPIRING_SOON (1-7 days), OVERDUE (<1 day)
@@ -142,7 +142,7 @@ After each phase, verify on localhost:5173 before proceeding:
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
 
 - [ ] 7. Enhance student service with status integration
-  - [~] 7.1 Update `src/services/studentService.js`
+  - [ ] 7.1 Update `src/services/studentService.js`
     - Add import for StatusClassifier
     - Create `getStudentsWithStatus(propertyId)` function
     - Fetch students with coverage_end_date from database
@@ -161,7 +161,7 @@ After each phase, verify on localhost:5173 before proceeding:
     - Verify existing functions still work unchanged
     - _Requirements: 3.1, 3.2, 3.3, 4.4_
 
-- [~] 8. Phase 3 checkpoint - Verify status engine
+- [ ] 8. Phase 3 checkpoint - Verify status engine
   - Verify StatusClassifier correctly classifies test students
   - Verify getStudentsWithStatus enhances records correctly
   - Run all unit and integration tests
@@ -173,7 +173,7 @@ After each phase, verify on localhost:5173 before proceeding:
 ### PHASE 4: Dashboard and UI Integration
 
 - [ ] 9. Update dashboard KPI metrics
-  - [~] 9.1 Update `src/parts/p4_dashboard.jsx` KPI strip
+  - [ ] 9.1 Update `src/parts/p4_dashboard.jsx` KPI strip
     - Import StatusClassifier
     - Modify Dashboard component to use getStudentsWithStatus
     - Update KPI calculations to use new status classifications
@@ -185,7 +185,7 @@ After each phase, verify on localhost:5173 before proceeding:
     - Add subtitle labels: "7+ days remaining", "1-7 days remaining", "Coverage expired"
     - _Requirements: 4.1, 4.2, 4.3, 4.4_
 
-  - [~] 9.2 Update property card metrics in dashboard
+  - [ ] 9.2 Update property card metrics in dashboard
     - Update property-level metrics to reflect new status system
     - Show Current/Expiring/Overdue counts per property
     - Update "Alerts" badge to show count of Expiring Soon + Overdue
@@ -194,7 +194,7 @@ After each phase, verify on localhost:5173 before proceeding:
 
 
 - [ ] 10. Update room list view to show coverage status
-  - [~] 10.1 Update room list in property view (likely in `src/parts/p5_views.jsx`)
+  - [ ] 10.1 Update room list in property view (likely in `src/parts/p5_views.jsx`)
     - Display coverage status badge next to student names
     - Show "X days remaining" or "X days overdue" label
     - Use color coding: green (Current), amber (Expiring Soon), red (Overdue)
@@ -203,7 +203,7 @@ After each phase, verify on localhost:5173 before proceeding:
     - _Requirements: 4.4_
 
 - [ ] 11. Update student profile view to show coverage details
-  - [~] 11.1 Add coverage information card to student profile drawer
+  - [ ] 11.1 Add coverage information card to student profile drawer
     - Create new "Coverage" section in student profile
     - Display billing anchor date
     - Display current coverage period (start - end dates)
@@ -213,7 +213,7 @@ After each phase, verify on localhost:5173 before proceeding:
     - Position coverage card prominently (after basic info, before payments)
     - _Requirements: 4.5_
 
-  - [~] 11.2 Update payment history display in student profile
+  - [ ] 11.2 Update payment history display in student profile
     - Add coverage dates to each payment entry
     - Show "Coverage: [start] - [end]" for each payment
     - Display coverage days count
@@ -221,7 +221,7 @@ After each phase, verify on localhost:5173 before proceeding:
     - _Requirements: 4.5, 5.5_
 
 - [ ] 12. Add payment preview to payment recording form
-  - [~] 12.1 Update payment modal in `src/parts/p3_modals.jsx`
+  - [ ] 12.1 Update payment modal in `src/parts/p3_modals.jsx`
     - Import RentCycleCalculator
     - Add real-time payment preview when amount entered
     - Show coverage days calculation
@@ -241,7 +241,7 @@ After each phase, verify on localhost:5173 before proceeding:
     - _Requirements: 5.1, 5.2, 5.3_
 
 - [ ] 13. Update payment recording to save coverage data
-  - [~] 13.1 Enhance `recordPayment` in `src/services/paymentService.js`
+  - [ ] 13.1 Enhance `recordPayment` in `src/services/paymentService.js`
     - Import PaymentProcessor and RentCycleCalculator
     - After payment recorded, calculate coverage data
     - Update payment record with coverage_start, coverage_end, coverage_days
@@ -258,7 +258,7 @@ After each phase, verify on localhost:5173 before proceeding:
     - Verify existing payment data preserved
     - _Requirements: 5.4, 5.5, 7.4, 8.3_
 
-- [~] 14. Phase 4 checkpoint - Verify dashboard integration on localhost:5173
+- [ ] 14. Phase 4 checkpoint - Verify dashboard integration on localhost:5173
   - Open localhost:5173 and verify all 5 success criteria from sprint 5.5-success-criteria.md:
     1. Dashboard KPI strip shows Current, Expiring Soon, Overdue with real numbers (not zeroes/dashes)
     2. Room list shows student with "X days remaining" next to status badge
@@ -275,7 +275,7 @@ After each phase, verify on localhost:5173 before proceeding:
 ### PHASE 5: Arrears Management and Report Updates
 
 - [ ] 15. Update arrears view with new status buckets
-  - [~] 15.1 Update `src/parts/p7_arrears.jsx` to use status classifications
+  - [ ] 15.1 Update `src/parts/p7_arrears.jsx` to use status classifications
     - Import StatusClassifier
     - Replace existing arrears logic with status-based bucketing
     - Create "Current" bucket for students with >7 days coverage
@@ -296,7 +296,7 @@ After each phase, verify on localhost:5173 before proceeding:
     - _Requirements: 6.3, 6.4_
 
 - [ ] 16. Update report service for dual reporting strategy
-  - [~] 16.1 Update `src/services/reportService.js`
+  - [ ] 16.1 Update `src/services/reportService.js`
     - Keep existing `generateCashBasisReport` unchanged for financial reports
     - Add new `generateCoverageReport(reportDate)` function
     - Coverage report uses coverage_end_date for operational views
@@ -316,7 +316,7 @@ After each phase, verify on localhost:5173 before proceeding:
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
 
 - [ ] 17. Update reports view UI
-  - [~] 17.1 Update `src/parts/p6_reports.jsx` to show both report types
+  - [ ] 17.1 Update `src/parts/p6_reports.jsx` to show both report types
     - Add toggle/tabs for "Financial Reports" vs "Operational Reports"
     - Financial reports continue using existing cash-basis format
     - Add new operational report view showing coverage-based status
@@ -325,7 +325,7 @@ After each phase, verify on localhost:5173 before proceeding:
     - Keep existing financial report format unchanged
     - _Requirements: 10.1, 10.2, 10.3_
 
-- [~] 18. Phase 5 checkpoint - Verify arrears and reports on localhost:5173
+- [ ] 18. Phase 5 checkpoint - Verify arrears and reports on localhost:5173
   - Open localhost:5173 and verify:
     - Arrears page shows four bucket cards with correct counts
     - Expiring Soon bucket shows students with 1-7 days remaining
@@ -341,7 +341,7 @@ After each phase, verify on localhost:5173 before proceeding:
 ### PHASE 6: Property-Based Testing and Verification
 
 - [ ] 19. Set up property-based testing framework
-  - [~] 19.1 Install fast-check library
+  - [ ] 19.1 Install fast-check library
     - Add fast-check to package.json dev dependencies
     - Install using `npm install --save-dev fast-check`
     - Configure Vitest to work with fast-check
@@ -525,7 +525,7 @@ After each phase, verify on localhost:5173 before proceeding:
     - Run 100 iterations minimum
     - _Requirements: 9.5_
 
-- [~] 26. Run comprehensive test suite
+- [ ] 26. Run comprehensive test suite
   - Run all property-based tests (minimum 100 iterations each)
   - Run all unit tests
   - Run all integration tests
@@ -534,7 +534,7 @@ After each phase, verify on localhost:5173 before proceeding:
   - Document any test failures and fix before proceeding
   - _Requirements: All_
 
-- [~] 27. Final end-to-end verification on localhost:5173
+- [ ] 27. Final end-to-end verification on localhost:5173
   - Complete all 5 verification steps from sprint 5.5-success-criteria.md:
     1. Dashboard KPI strip shows Current, Expiring Soon, Overdue with real numbers
     2. Room list shows "X days remaining" next to student status badges
@@ -550,7 +550,7 @@ After each phase, verify on localhost:5173 before proceeding:
   - Performance check: status calculations < 1 second
   - _Requirements: All_
 
-- [~] 28. Final checkpoint - Production readiness verification
+- [ ] 28. Final checkpoint - Production readiness verification
   - All property-based tests passing (100+ iterations each)
   - All unit tests passing
   - All integration tests passing
