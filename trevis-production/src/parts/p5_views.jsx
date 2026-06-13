@@ -1,5 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { T, font, fmt, Badge, Stat, Bar, Btn, DateRangeFilter, isUnassignedRecord, filterUnassignedRecords, countOccupiedBeds, getDisplayName } from "./p2_helpers.jsx";
+import { classifyStudent, getStatusBadgeConfig } from "../services/statusClassifier.js";
+import * as CoverageDB from "../services/coverageDatabaseService.js";
 
 /* ═══════════════════════════════════════════════════════════
    PROPERTY DETAIL VIEW
@@ -8,6 +10,40 @@ export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, o
   const prop = props.find(p => p.name === name);
   const ac = T.prop[name] || { accent: T.gold };
   const [search, setSearch] = useState("");
+  
+  // Phase 4B: Fetch coverage data for all students in this property
+  // READ ONLY - no calculations, enriches students with coverage classification
+  const [studentsWithCoverage, setStudentsWithCoverage] = useState(new Map());
+  
+  useEffect(() => {
+    async function fetchCoverage() {
+      const coverageMap = new Map();
+      
+      // Get all student IDs from this property
+      const allStudents = prop.rooms.flatMap(r => r.students);
+      
+      for (const student of allStudents) {
+        if (student.id && student.status === 'ACTIVE') {
+          try {
+            const coverageData = await CoverageDB.getStudentCoverageData(student.id);
+            if (coverageData) {
+              // Use statusClassifier to get coverage status - NO CALCULATIONS HERE
+              const classification = classifyStudent(coverageData);
+              coverageMap.set(student.id, classification);
+            }
+          } catch (err) {
+            console.error(`Failed to fetch coverage for student ${student.id}:`, err);
+          }
+        }
+      }
+      
+      setStudentsWithCoverage(coverageMap);
+    }
+    
+    if (prop) {
+      fetchCoverage();
+    }
+  }, [prop]);
   const pct = prop.expected > 0 ? ((prop.collected / prop.expected)*100).toFixed(1) : "0.0";
   const filtered = prop.rooms.filter(r =>
     !search || r.no.toLowerCase().includes(search.toLowerCase()) ||
@@ -43,13 +79,13 @@ export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, o
       </div>
       {filtered.length === 0 && <div style={{ padding:32,textAlign:"center",color:T.muted,fontSize:13 }}>No rooms match your search</div>}
       <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-        {filtered.map(room => <RoomRow key={room.id} room={room} ac={ac} propName={name} onStudentClick={onStudentClick} isAdmin={isAdmin} onRemoveRoom={onRemoveRoom} />)}
+        {filtered.map(room => <RoomRow key={room.id} room={room} ac={ac} propName={name} onStudentClick={onStudentClick} isAdmin={isAdmin} onRemoveRoom={onRemoveRoom} studentsWithCoverage={studentsWithCoverage} />)}
       </div>
     </div>
   );
 }
 
-function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom }) {
+function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom, studentsWithCoverage }) {
   const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -103,17 +139,36 @@ function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom }) 
           {room.students.map(s => {
             const displayName = getDisplayName(s);
             const isClickable = s.status!=="VACANT"&&s.status!=="VACATED"&&!isUnassignedRecord(s);
+            
+            // Phase 4B: Get coverage classification from service (READ ONLY - no calculations)
+            const coverage = studentsWithCoverage?.get(s.id);
+            const coverageLabel = coverage?.displayLabel || null;
+            
             return (
               <div key={s.id} onClick={()=>isClickable&&onStudentClick&&onStudentClick(s,room,propName)}
                 className="pn-room-students"
-                style={{ display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",gap:12,padding:"10px 20px",
+                style={{ display:"grid",gridTemplateColumns:"2fr 1fr 1fr auto",gap:12,padding:"10px 20px",
                   borderBottom:`1px solid ${T.border}20`,alignItems:"center",cursor:isClickable?"pointer":"default",transition:"background .15s" }}
                 onMouseEnter={e=>{if(isClickable)e.currentTarget.style.background=T.hover}}
                 onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                 <div style={{ fontSize:13,color:s.status==="VACANT"||s.status==="VACATED"||isUnassignedRecord(s)?T.muted:T.text,fontWeight:s.status==="VACANT"||isUnassignedRecord(s)?400:600,fontStyle:s.status==="VACANT"||isUnassignedRecord(s)?"italic":"normal" }}>{displayName}</div>
                 <div style={{ fontSize:12,color:T.subtle,fontFamily:"'IBM Plex Mono',monospace" }}>{s.status==="VACANT"||isUnassignedRecord(s)?"—":`$${s.paid} paid${s.balance>0?` · $${s.balance} bal`:''}`}</div>
                 <div style={{ fontSize:11,color:T.muted }}>{s.date||"—"}</div>
-                <div style={{ justifySelf: "end" }}><Badge status={s.status} /></div>
+                <div style={{ justifySelf: "end", display:"flex", alignItems:"center", gap:8 }}>
+                  {/* Phase 4B: Display coverage label next to status badge (DISPLAY ONLY) */}
+                  {coverageLabel && s.status === 'ACTIVE' && (
+                    <span style={{ 
+                      fontSize:11, 
+                      fontWeight:600,
+                      color: coverage.status === 'CURRENT' ? '#22C55E' : 
+                             coverage.status === 'EXPIRING_SOON' ? '#F59E0B' : 
+                             coverage.status === 'DUE_TODAY' ? '#F97316' : '#EF4444'
+                    }}>
+                      {coverageLabel}
+                    </span>
+                  )}
+                  <Badge status={s.status} />
+                </div>
               </div>
             );
           })}
