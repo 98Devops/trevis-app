@@ -121,10 +121,13 @@ export function DataProvider({ children }) {
   const [error, setError] = useState(null);
 
   const refresh = useCallback(async () => {
+    const timerId = `getProperties-${Date.now()}`;
     setLoading(true);
     try {
+      console.time(`[Perf] ${timerId}`);
       console.log('[Trevis] Fetching properties...');
       const { data, error: err } = await getProperties();
+      console.timeEnd(`[Perf] ${timerId}`);
       console.log('[Trevis] Properties:', data?.length, 'error:', err?.message);
       if (err) { setError(err.message); }
       else { setProperties(data || []); setError(null); }

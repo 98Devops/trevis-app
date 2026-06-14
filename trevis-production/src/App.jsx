@@ -116,6 +116,11 @@ function AppInner() {
   const [toast, setToast] = useState(null);
   const [financesFilter, setFinancesFilter] = useState("ALL");
   const [showSettings, setShowSettings] = useState(false);
+  
+  // Phase 4B.9: Coverage cache (studentId → coverage classification)
+  // Prevents duplicate coverage fetches when revisiting properties
+  const [coverageCache, setCoverageCache] = useState(new Map());
+  const [coverageCacheTimestamp, setCoverageCacheTimestamp] = useState(Date.now());
 
   // Build UI props from raw Supabase data or use demo
   const props = useMemo(() => {
@@ -198,6 +203,12 @@ function AppInner() {
         notes: payment.notes,
         recordedBy: user?.id
       });
+      
+      // Phase 4B.9: Invalidate coverage cache on payment (data changed)
+      console.log('[Phase4B.9] Invalidating coverage cache after payment');
+      setCoverageCache(new Map());
+      setCoverageCacheTimestamp(Date.now());
+      
       // No need to recalculate balances - recordPaymentWithCoverage handles everything
       refresh();
     }
@@ -368,6 +379,9 @@ function AppInner() {
                 onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}}
                 onExport={handlePropertyExport}
                 onRemoveRoom={handleRemoveRoom}
+                coverageCache={coverageCache}
+                setCoverageCache={setCoverageCache}
+                coverageCacheTimestamp={coverageCacheTimestamp}
                 isAdmin={isAdmin} />
             </ErrorBoundary>
           )}

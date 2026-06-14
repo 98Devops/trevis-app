@@ -6,7 +6,7 @@ import * as CoverageDB from "../services/coverageDatabaseService.js";
 /* ═══════════════════════════════════════════════════════════
    PROPERTY DETAIL VIEW
 ═══════════════════════════════════════════════════════════ */
-export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, onAddRoom, onStudentClick, isAdmin, onExport, onRemoveRoom }) {
+export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, onAddRoom, onStudentClick, isAdmin, onExport, onRemoveRoom, coverageCache, setCoverageCache, coverageCacheTimestamp }) {
   const prop = props.find(p => p.name === name);
   const ac = T.prop[name] || { accent: T.gold };
   const [search, setSearch] = useState("");
@@ -21,7 +21,7 @@ export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, o
     
     async function fetchCoverage() {
       setIsLoadingCoverage(true);
-      const newCoverageMap = new Map();
+      const newCoverageMap = new Map(coverageCache || new Map()); // Start with cache
       
       // Get all REAL student IDs from this property (exclude VACANT placeholders)
       const realStudents = prop.rooms.flatMap(r => 
@@ -36,31 +36,47 @@ export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, o
         })
       );
       
-      console.log(`[Phase4B] Fetching coverage for ${realStudents.length} real students in ${name}`);
+      // Phase 4B.9: Only fetch students NOT in cache
+      const studentsToFetch = realStudents.filter(s => !coverageCache?.has(s.id));
       
-      // Fetch coverage for all real students in parallel
-      const coveragePromises = realStudents.map(async (student) => {
-        try {
-          const coverageData = await CoverageDB.getStudentCoverageData(student.id);
-          if (coverageData && coverageData.status === 'ACTIVE') {
-            // Use statusClassifier to get coverage status - NO CALCULATIONS HERE
-            const classification = classifyStudent(coverageData);
-            return { studentId: student.id, classification };
+      console.log(`[Phase4B.9] Coverage cache: ${coverageCache?.size || 0} cached, ${studentsToFetch.length} to fetch`);
+      
+      if (studentsToFetch.length > 0) {
+        const timerId = `fetchCoverage-${name}-${Date.now()}`;
+        console.time(`[Perf] ${timerId}`);
+        
+        // Fetch coverage for uncached students only in parallel
+        const coveragePromises = studentsToFetch.map(async (student) => {
+          try {
+            const coverageData = await CoverageDB.getStudentCoverageData(student.id);
+            if (coverageData && coverageData.status === 'ACTIVE') {
+              // Use statusClassifier to get coverage status - NO CALCULATIONS HERE
+              const classification = classifyStudent(coverageData);
+              return { studentId: student.id, classification };
+            }
+          } catch (err) {
+            console.error(`[Phase4B] Coverage fetch failed for ${student.name}:`, err.message);
           }
-        } catch (err) {
-          console.error(`[Phase4B] Coverage fetch failed for ${student.name}:`, err.message);
+          return null;
+        });
+        
+        const results = await Promise.all(coveragePromises);
+        console.timeEnd(`[Perf] ${timerId}`);
+        
+        // Update cache with new results
+        results.forEach(result => {
+          if (result && !cancelled) {
+            newCoverageMap.set(result.studentId, result.classification);
+          }
+        });
+        
+        // Update cache in App state
+        if (!cancelled && setCoverageCache) {
+          setCoverageCache(newCoverageMap);
         }
-        return null;
-      });
-      
-      const results = await Promise.all(coveragePromises);
-      
-      // Build coverage map from results
-      results.forEach(result => {
-        if (result && !cancelled) {
-          newCoverageMap.set(result.studentId, result.classification);
-        }
-      });
+      } else {
+        console.log(`[Phase4B.9] All ${realStudents.length} students loaded from cache ✅`);
+      }
       
       if (!cancelled) {
         console.log(`[Phase4B] Coverage hydrated: ${newCoverageMap.size} students classified`);
@@ -74,7 +90,7 @@ export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, o
     }
     
     return () => { cancelled = true; };
-  }, [name, prop]); // Refetch when property changes
+  }, [name, prop, coverageCache, setCoverageCache, coverageCacheTimestamp]); // Cache deps added
   const pct = prop.expected > 0 ? ((prop.collected / prop.expected)*100).toFixed(1) : "0.0";
   const filtered = prop.rooms.filter(r =>
     !search || r.no.toLowerCase().includes(search.toLowerCase()) ||
@@ -265,23 +281,23 @@ function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom, co
           <div style={{ padding:"14px 20px", background:T.surface, borderTop:`1px solid ${T.border}40`, marginTop:4 }}>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:isAdmin?10:0 }}>
               <div>
-                <div style={{ fontSize:9, color:T.muted, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:3 }}>Expected</div>
+                <div style={{ fontSize:9, color:T.muted, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:3 }} title="Expected rent for this month">Monthly Expected</div>
                 <div style={{ fontSize:15, fontWeight:700, color:T.text, fontFamily:"'IBM Plex Mono',monospace" }}>${expected}</div>
               </div>
               <div>
-                <div style={{ fontSize:9, color:T.muted, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:3 }}>Collected</div>
+                <div style={{ fontSize:9, color:T.muted, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:3 }} title="Payments received this month">Monthly Collected</div>
                 <div style={{ fontSize:15, fontWeight:700, color:T.green, fontFamily:"'IBM Plex Mono',monospace" }}>${collected}</div>
               </div>
               <div>
-                <div style={{ fontSize:9, color:T.muted, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:3 }}>
-                  {outstanding < 0 ? "Prepaid" : "Outstanding"}
+                <div style={{ fontSize:9, color:T.muted, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:3 }} title={outstanding < 0 ? "Prepaid amount beyond current month" : "Amount still owed this month"}>
+                  {outstanding < 0 ? "Monthly Prepaid" : "Monthly Outstanding"}
                 </div>
                 <div style={{ fontSize:15, fontWeight:700, color:outstanding>0?T.red:outstanding<0?T.blue:T.green, fontFamily:"'IBM Plex Mono',monospace" }}>
                   ${Math.abs(outstanding)}
                 </div>
               </div>
               <div>
-                <div style={{ fontSize:9, color:T.muted, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:3 }}>Coverage Rate</div>
+                <div style={{ fontSize:9, color:T.muted, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:3 }} title="Percentage of occupied beds with valid coverage (not expired)">Coverage Rate</div>
                 <div style={{ fontSize:15, fontWeight:700, color:coverageRate===100?T.green:T.amber }}>{coverageRate}%</div>
               </div>
             </div>

@@ -17,10 +17,13 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
   
   useEffect(() => {
     let cancelled = false;
+    const timerId = `getDashboardKPIs-${Date.now()}`;
     
     async function fetchKPIs() {
       setIsLoadingKPIs(true);
+      console.time(`[Perf] ${timerId}`);
       const kpis = await CoverageDB.getDashboardKPIs();
+      console.timeEnd(`[Perf] ${timerId}`);
       if (!cancelled) {
         setCoverageKPIs(kpis);
         setIsLoadingKPIs(false);
