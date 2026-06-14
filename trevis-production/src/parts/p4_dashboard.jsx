@@ -13,13 +13,22 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
   // Phase 4A: Fetch coverage-based KPIs from database service
   // READ ONLY - no calculations, display values from coverageDatabaseService
   const [coverageKPIs, setCoverageKPIs] = useState(null);
+  const [isLoadingKPIs, setIsLoadingKPIs] = useState(true);
   
   useEffect(() => {
+    let cancelled = false;
+    
     async function fetchKPIs() {
+      setIsLoadingKPIs(true);
       const kpis = await CoverageDB.getDashboardKPIs();
-      setCoverageKPIs(kpis);
+      if (!cancelled) {
+        setCoverageKPIs(kpis);
+        setIsLoadingKPIs(false);
+      }
     }
     fetchKPIs();
+    
+    return () => { cancelled = true; };
   }, [props]); // Refetch when properties change
 
   const totals = useMemo(() => props.reduce((a, p) => ({
@@ -62,7 +71,17 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
 
       {/* KPI strip - Phase 4A: Coverage-Based Metrics (READ ONLY) */}
       <div className="pn-kpi-grid" style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:14, marginBottom:20 }}>
-        {coverageKPIs ? (
+        {isLoadingKPIs ? (
+          // Loading skeleton - prevents flash of old metrics
+          <>
+            <Stat label="Total Students" value="—" accent={T.blue} />
+            <Stat label="Current" value="—" sub="Loading..." accent="#22C55E" />
+            <Stat label="Expiring Soon" value="—" sub="Loading..." accent="#F59E0B" />
+            <Stat label="Overdue" value="—" sub="Loading..." accent="#EF4444" />
+            <Stat label="Collection Rate" value="—" sub="Loading..." accent={T.gold} />
+          </>
+        ) : coverageKPIs ? (
+          // Coverage-based KPIs (Phase 4A)
           <>
             <Stat 
               label="Total Students" 
@@ -95,12 +114,12 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
             />
           </>
         ) : (
-          // Loading state - show old metrics until KPIs load
+          // Fallback if KPI fetch fails - show totals only
           <>
             <Stat label="Total Students" value={totals.students} accent={T.blue} />
             <Stat label="Collected" value={fmt(totals.collected)} accent={T.green} />
-            <Stat label="Outstanding" value={fmt(totals.expected-totals.collected)} accent={T.red} sub={`${totals.vacantBeds} vacant beds`} />
-            <Stat label="Collection Rate" value={`${rate}%`} sub={`${totals.overdue} need attention`} accent={T.gold} />
+            <Stat label="Outstanding" value={fmt(totals.expected-totals.collected)} accent={T.red} />
+            <Stat label="Collection Rate" value={`${rate}%`} accent={T.gold} />
           </>
         )}
       </div>

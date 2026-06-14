@@ -44,6 +44,17 @@ export async function getPaymentsByPropertyMonth(propertyId, monthYear) {
 export async function updatePayment(paymentId, updates, userId) {
   if (!isConfigured) return { data: null, error: { message: 'Not configured' } };
   
+  // Get student ID before update (needed for coverage recalculation)
+  const { data: payment, error: fetchErr } = await supabase
+    .from('payments')
+    .select('student_id')
+    .eq('id', paymentId)
+    .single();
+
+  if (fetchErr) {
+    return { data: null, error: fetchErr };
+  }
+
   // If payment_date is updated, recalculate month_year
   if (updates.payment_date) {
     updates.month_year = updates.payment_date.substring(0, 7); // 'YYYY-MM'
@@ -63,18 +74,55 @@ export async function updatePayment(paymentId, updates, userId) {
     .update(payload)
     .eq('id', paymentId);
   
-  return { data: !error, error };
+  if (error) {
+    return { data: null, error };
+  }
+
+  // Phase 4B.3: Rebuild coverage from payment history after update
+  try {
+    const { rebuildStudentCoverage } = await import('./coverageDatabaseService.js');
+    await rebuildStudentCoverage(payment.student_id);
+  } catch (rebuildErr) {
+    console.error('[Phase4B.3] Coverage rebuild failed after payment update:', rebuildErr);
+    // Don't fail the update if coverage rebuild fails - log and continue
+  }
+
+  return { data: true, error: null };
 }
 
 export async function deletePayment(paymentId) {
   if (!isConfigured) return { data: null, error: { message: 'Not configured' } };
   
+  // Get student ID before delete (needed for coverage recalculation)
+  const { data: payment, error: fetchErr } = await supabase
+    .from('payments')
+    .select('student_id')
+    .eq('id', paymentId)
+    .single();
+
+  if (fetchErr) {
+    return { data: null, error: fetchErr };
+  }
+
   const { error } = await supabase
     .from('payments')
     .delete()
     .eq('id', paymentId);
   
-  return { data: !error, error };
+  if (error) {
+    return { data: null, error };
+  }
+
+  // Phase 4B.3: Rebuild coverage from payment history after delete
+  try {
+    const { rebuildStudentCoverage } = await import('./coverageDatabaseService.js');
+    await rebuildStudentCoverage(payment.student_id);
+  } catch (rebuildErr) {
+    console.error('[Phase4B.3] Coverage rebuild failed after payment delete:', rebuildErr);
+    // Don't fail the delete if coverage rebuild fails - log and continue
+  }
+
+  return { data: true, error: null };
 }
 
 /**

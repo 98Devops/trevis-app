@@ -8,6 +8,7 @@ export function SettingsPanel({ onClose, isAdmin, user }) {
   const [allowedEmails, setAllowedEmails] = useState([]);
   const [newEmail, setNewEmail] = useState("");
   const [loading, setLoading] = useState(false);
+  const [repairingCoverage, setRepairingCoverage] = useState(false);
 
   // Mock properties for demo
   const [properties, setProperties] = useState([
@@ -60,6 +61,30 @@ export function SettingsPanel({ onClose, isAdmin, user }) {
     if (confirm("Regenerate all obligations? This will recalculate all student obligations.")) {
       alert("Obligations regenerated!");
       // In real app: call generateObligations service
+    }
+  };
+
+  const handleRepairCoverage = async () => {
+    if (!confirm("Repair coverage for ALL active students?\n\nThis will rebuild coverage from payment history for students affected by the old payment flow.\n\nThis operation is safe and can take 10-30 seconds.")) {
+      return;
+    }
+
+    setRepairingCoverage(true);
+    
+    try {
+      const { repairAllStudentsCoverage } = await import('../services/coverageRepairService.js');
+      const result = await repairAllStudentsCoverage();
+      
+      if (result.success) {
+        alert(`✓ Coverage repair complete!\n\n${result.repaired} students repaired\n${result.failed} failed\n\nPlease refresh the page to see updated coverage.`);
+      } else {
+        alert(`⚠ Coverage repair completed with errors:\n\n${result.repaired} students repaired\n${result.failed} failed\n\nErrors:\n${result.errors.join('\n')}`);
+      }
+    } catch (error) {
+      alert(`✗ Coverage repair failed: ${error.message}`);
+      console.error('[Settings] Coverage repair failed:', error);
+    } finally {
+      setRepairingCoverage(false);
     }
   };
 
@@ -241,6 +266,15 @@ export function SettingsPanel({ onClose, isAdmin, user }) {
           }}>
             <h3 style={{ fontSize: 14, fontWeight: 700, color: T.red, marginBottom: 16 }}>⚠️ Danger Zone</h3>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Repair Coverage Data</div>
+                  <div style={{ fontSize: 11, color: T.muted }}>Fix students with stale coverage from old payment flow (Phase 4B.3)</div>
+                </div>
+                <Btn accent={T.green} onClick={handleRepairCoverage} disabled={repairingCoverage} style={{ fontSize: 11 }}>
+                  {repairingCoverage ? 'Repairing...' : 'Repair All'}
+                </Btn>
+              </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Clear Monthly Snapshots</div>

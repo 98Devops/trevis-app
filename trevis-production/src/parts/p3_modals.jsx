@@ -400,17 +400,16 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
 
   const handleDeletePayment = async (paymentId) => {
     try {
-      const { deletePayment, recalculateBalances } = await import('./p1_imports_context.jsx');
+      const { deletePayment } = await import('./p1_imports_context.jsx');
       const { error } = await deletePayment(paymentId);
       if (error) throw error;
-      // Recalculate all balances and statuses
-      await recalculateBalances();
+      // Phase 4B.3: deletePayment now calls rebuildStudentCoverage automatically
       // Refresh payment history
       const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
       const { data } = await getPaymentsByStudent(student.id);
       setPaymentHistory(data || []);
       setConfirmDelete(null);
-      // Trigger full app refresh to recalculate everything
+      // Trigger full app refresh to update UI
       if (refresh) refresh();
     } catch (err) {
       console.error('Delete payment failed:', err);
@@ -711,17 +710,16 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
                               payment={p} 
                               onSave={async (updated) => {
                                 try {
-                                  const { updatePayment, recalculateBalances } = await import('./p1_imports_context.jsx');
+                                  const { updatePayment } = await import('./p1_imports_context.jsx');
                                   const { error: updateError } = await updatePayment(p.id, updated, user?.email || 'system');
                                   if (updateError) throw updateError;
-                                  // Recalculate all balances and statuses
-                                  await recalculateBalances();
+                                  // Phase 4B.3: updatePayment now calls rebuildStudentCoverage automatically
                                   // Refresh payment history
                                   const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
                                   const { data } = await getPaymentsByStudent(student.id);
                                   setPaymentHistory(data || []);
                                   setEditingPayment(null);
-                                  // Trigger full app refresh to recalculate everything
+                                  // Trigger full app refresh to update UI
                                   if (refresh) refresh();
                                 } catch (err) {
                                   console.error('Edit payment failed:', err);
@@ -748,10 +746,10 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
                                       type="number"
                                       onSave={async (newValue) => {
                                         try {
-                                          const { updatePayment, recalculateBalances } = await import('./p1_imports_context.jsx');
+                                          const { updatePayment } = await import('./p1_imports_context.jsx');
                                           const { error: updateError } = await updatePayment(p.id, { amount: Number(newValue) }, user?.email || 'system');
                                           if (updateError) throw updateError;
-                                          await recalculateBalances();
+                                          // Phase 4B.3: updatePayment now calls rebuildStudentCoverage automatically
                                           const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
                                           const { data } = await getPaymentsByStudent(student.id);
                                           setPaymentHistory(data || []);
@@ -775,10 +773,10 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
                                         type="date"
                                         onSave={async (newValue) => {
                                           try {
-                                            const { updatePayment, recalculateBalances } = await import('./p1_imports_context.jsx');
+                                            const { updatePayment } = await import('./p1_imports_context.jsx');
                                             const { error: updateError } = await updatePayment(p.id, { payment_date: newValue }, user?.email || 'system');
                                             if (updateError) throw updateError;
-                                            await recalculateBalances();
+                                            // Phase 4B.3: updatePayment now calls rebuildStudentCoverage automatically
                                             const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
                                             const { data } = await getPaymentsByStudent(student.id);
                                             setPaymentHistory(data || []);

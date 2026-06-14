@@ -39,6 +39,58 @@ const DEMO_PROPS = [
 ];
 
 /* ═══════════════════════════════════════════════════════════
+   LOADING SKELETON COMPONENTS (Phase 4B.6)
+═══════════════════════════════════════════════════════════ */
+function DashboardSkeleton() {
+  const now = new Date();
+  const monthYear = now.toLocaleString("en-US", { month:"long", year:"numeric" });
+  
+  return (
+    <div>
+      <div style={{ marginBottom:24 }}>
+        <h2 style={{ fontSize:13, color:T.gold, textTransform:"uppercase", letterSpacing:"0.15em", fontWeight:600, marginBottom:4 }}>{monthYear}</h2>
+        <div style={{ fontSize:11, color:T.subtle, marginBottom:8 }}>Loading...</div>
+        <div className="pn-header-row" style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <h1 style={{ fontSize:28, fontWeight:800, color:T.text, margin:0 }}>Portfolio Overview</h1>
+        </div>
+      </div>
+
+      {/* KPI strip skeleton */}
+      <div className="pn-kpi-grid" style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:14, marginBottom:20 }}>
+        {[1,2,3,4,5].map(i => (
+          <div key={i} style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:12, padding:"16px 18px" }}>
+            <div style={{ fontSize:11, color:T.muted, marginBottom:6 }}>—</div>
+            <div style={{ fontSize:24, fontWeight:800, color:T.subtle }}>—</div>
+            <div style={{ fontSize:10, color:T.muted, marginTop:2 }}>Loading...</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Properties grid skeleton */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:16, marginTop:24 }}>
+        {[1,2,3,4].map(i => (
+          <div key={i} style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:16, padding:20 }}>
+            <div style={{ width:40, height:40, borderRadius:10, background:T.surface, marginBottom:12 }} />
+            <div style={{ fontSize:16, fontWeight:700, color:T.text, marginBottom:4 }}>—</div>
+            <div style={{ fontSize:11, color:T.muted }}>Loading...</div>
+            <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${T.border}`, display:"flex", gap:16 }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:10, color:T.muted }}>Rooms</div>
+                <div style={{ fontSize:16, fontWeight:700, color:T.text }}>—</div>
+              </div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:10, color:T.muted }}>Students</div>
+                <div style={{ fontSize:16, fontWeight:700, color:T.text }}>—</div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
    INNER APP (needs auth + data contexts)
 ═══════════════════════════════════════════════════════════ */
 function AppInner() {
@@ -135,14 +187,18 @@ function AppInner() {
 
   const handleRecordPayment = async (propName, studentId, payment) => {
     if (isConfigured) {
-      await recordPaymentSvc({
-        studentId, amount: payment.amount, paymentDate: payment.date,
-        paymentMethod: payment.method, receiptNumber: payment.receipt,
-        notes: payment.notes, recordedBy: user?.id
+      // Phase 4B.2: Use new coverage-aware payment recording
+      const { recordPaymentWithCoverage } = await import('./services/coverageDatabaseService.js');
+      await recordPaymentWithCoverage({
+        studentId,
+        amount: payment.amount,
+        paymentDate: payment.date,
+        paymentMethod: payment.method,
+        receiptNumber: payment.receipt,
+        notes: payment.notes,
+        recordedBy: user?.id
       });
-      // Recalculate balances after recording payment
-      const { recalculateBalances } = await import('./parts/p1_imports_context.jsx');
-      await recalculateBalances();
+      // No need to recalculate balances - recordPaymentWithCoverage handles everything
       refresh();
     }
   };
@@ -288,7 +344,12 @@ function AppInner() {
 
         {/* Main */}
         <div className="pn-main" style={{ flex:1, padding:"36px 40px", overflowY:"auto", maxHeight:"100vh" }}>
-          {view === "dashboard" && (
+          {/* Phase 4B.6: Show loading skeleton while data is fetching - prevents flicker */}
+          {dataLoading && view === "dashboard" ? (
+            <ErrorBoundary componentName="Dashboard">
+              <DashboardSkeleton />
+            </ErrorBoundary>
+          ) : view === "dashboard" && (
             <ErrorBoundary componentName="Dashboard">
               <Dashboard props={visibleProps} onSelect={handleSelect}
                 onAddStudent={()=>{if(isAdmin){setAddStudentProp("");setShowAddStudent(true);}}}

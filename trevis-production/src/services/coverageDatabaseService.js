@@ -21,10 +21,8 @@ import { classifyPortfolio } from './statusClassifier.js';
  * Record payment and update student coverage
  * 
  * This function:
- * 1. Fetches current student state
- * 2. Calculates coverage using paymentProcessor (handles early payments)
- * 3. Inserts payment record with coverage data
- * 4. Updates student coverage fields
+ * 1. Inserts payment record
+ * 2. Rebuilds student coverage from ALL payments (ensures consistency)
  * 
  * @param {object} params - Payment recording parameters
  * @param {string} params.studentId - Student ID
@@ -35,12 +33,10 @@ import { classifyPortfolio } from './statusClassifier.js';
  * @param {string} [params.notes] - Payment notes (optional)
  * @param {string} params.recordedBy - User ID who recorded payment
  * 
- * @returns {Promise<{payment: object, result: object}>} Payment record and coverage calculation
+ * @returns {Promise<{payment: object, coverage: object}>} Payment record and final coverage state
  * 
  * @throws {Error} If student not found
- * @throws {Error} If room rent not found
  * @throws {Error} If payment insert fails
- * @throws {Error} If student update fails
  */
 export async function recordPaymentWithCoverage({
   studentId,
@@ -51,38 +47,7 @@ export async function recordPaymentWithCoverage({
   notes,
   recordedBy
 }) {
-  // 1. Fetch student current state
-  const { data: student, error: sErr } = await supabase
-    .from('students')
-    .select('coverage_end, status, rooms(rent_per_bed)')
-    .eq('id', studentId)
-    .single();
-
-  if (sErr || !student) {
-    throw new Error('Student not found');
-  }
-
-  const monthlyRent = student.rooms?.rent_per_bed;
-  if (!monthlyRent) {
-    throw new Error('Room rent not found');
-  }
-
-  // 2. Calculate coverage using paymentProcessor
-  // This handles early payment detection and prepaid day preservation
-  const paymentInput = {
-    amount: parseFloat(amount),
-    payment_date: paymentDate
-  };
-
-  const studentState = {
-    coverage_end: student.coverage_end,
-    monthly_rent: monthlyRent,
-    status: student.status
-  };
-
-  const result = processPayment(paymentInput, studentState);
-
-  // 3. Insert payment record
+  // 1. Insert payment record (without coverage calculation yet)
   const { data: payment, error: pErr } = await supabase
     .from('payments')
     .insert({
@@ -93,10 +58,8 @@ export async function recordPaymentWithCoverage({
       receipt_number: receiptNumber || null,
       month_year: paymentDate.substring(0, 7), // Extract YYYY-MM
       notes: notes || null,
-      recorded_by: recordedBy,
-      coverage_start_date: result.coverageStart,
-      coverage_end_date: result.coverageEnd,
-      days_covered: result.coverageDays
+      recorded_by: recordedBy
+      // coverage fields will be set by rebuildStudentCoverage
     })
     .select()
     .single();
@@ -105,22 +68,10 @@ export async function recordPaymentWithCoverage({
     throw new Error(`Payment insert failed: ${pErr.message}`);
   }
 
-  // 4. Update student coverage
-  const { error: uErr } = await supabase
-    .from('students')
-    .update({
-      coverage_start: result.coverageStart,
-      coverage_end: result.coverageEnd,
-      daily_rate: result.dailyRate,
-      next_due_date: result.nextDueDate
-    })
-    .eq('id', studentId);
+  // 2. Rebuild coverage from ALL payments (ensures consistency)
+  const coverage = await rebuildStudentCoverage(studentId);
 
-  if (uErr) {
-    throw new Error(`Student update failed: ${uErr.message}`);
-  }
-
-  return { payment, result };
+  return { payment, coverage };
 }
 
 /**
@@ -234,4 +185,127 @@ export async function getAllStudentsCoverage() {
   }
 
   return data;
+}
+
+/**
+ * Rebuild student coverage from payment history (Phase 4B.3)
+ * 
+ * This function ensures coverage fields are ALWAYS derived from payment history.
+ * Called after DELETE, UPDATE, or CREATE payment operations.
+ * 
+ * Algorithm:
+ * 1. Load ALL payments for student ordered by payment_date ASC
+ * 2. Reset coverage state
+ * 3. Replay every payment through processPayment()
+ * 4. Calculate final coverage state
+ * 5. Update student coverage fields atomically
+ * 
+ * @param {string} studentId - Student ID to rebuild coverage for
+ * @returns {Promise<{coverage_start: string|null, coverage_end: string|null, daily_rate: number|null, next_due_date: string|null}>}
+ * @throws {Error} If student not found
+ * @throws {Error} If student update fails
+ */
+export async function rebuildStudentCoverage(studentId) {
+  // 1. Fetch student and room rent
+  const { data: student, error: sErr } = await supabase
+    .from('students')
+    .select('id, status, rooms(rent_per_bed)')
+    .eq('id', studentId)
+    .single();
+
+  if (sErr || !student) {
+    throw new Error('Student not found');
+  }
+
+  const monthlyRent = student.rooms?.rent_per_bed;
+  if (!monthlyRent) {
+    throw new Error('Room rent not found');
+  }
+
+  // 2. Load ALL payments ordered by payment_date ASC
+  const { data: payments, error: pErr } = await supabase
+    .from('payments')
+    .select('id, amount, payment_date')
+    .eq('student_id', studentId)
+    .order('payment_date', { ascending: true });
+
+  if (pErr) {
+    throw new Error(`Failed to load payments: ${pErr.message}`);
+  }
+
+  // 3. If no payments, reset coverage to NULL
+  if (!payments || payments.length === 0) {
+    const { error: uErr } = await supabase
+      .from('students')
+      .update({
+        coverage_start: null,
+        coverage_end: null,
+        daily_rate: null,
+        next_due_date: null
+      })
+      .eq('id', studentId);
+
+    if (uErr) {
+      throw new Error(`Student update failed: ${uErr.message}`);
+    }
+
+    return {
+      coverage_start: null,
+      coverage_end: null,
+      daily_rate: null,
+      next_due_date: null
+    };
+  }
+
+  // 4. Replay all payments through processPayment()
+  let currentCoverageEnd = null;
+  let finalResult = null;
+
+  for (const payment of payments) {
+    const paymentInput = {
+      amount: parseFloat(payment.amount),
+      payment_date: payment.payment_date
+    };
+
+    const studentState = {
+      coverage_end: currentCoverageEnd,
+      monthly_rent: monthlyRent,
+      status: student.status
+    };
+
+    finalResult = processPayment(paymentInput, studentState);
+    currentCoverageEnd = finalResult.coverageEnd;
+
+    // Update payment record with recalculated coverage metadata
+    await supabase
+      .from('payments')
+      .update({
+        coverage_start_date: finalResult.coverageStart,
+        coverage_end_date: finalResult.coverageEnd,
+        days_covered: finalResult.coverageDays
+      })
+      .eq('id', payment.id);
+  }
+
+  // 5. Update student coverage fields with final state
+  const { error: uErr } = await supabase
+    .from('students')
+    .update({
+      coverage_start: finalResult.coverageStart,
+      coverage_end: finalResult.coverageEnd,
+      daily_rate: finalResult.dailyRate,
+      next_due_date: finalResult.nextDueDate
+    })
+    .eq('id', studentId);
+
+  if (uErr) {
+    throw new Error(`Student update failed: ${uErr.message}`);
+  }
+
+  return {
+    coverage_start: finalResult.coverageStart,
+    coverage_end: finalResult.coverageEnd,
+    daily_rate: finalResult.dailyRate,
+    next_due_date: finalResult.nextDueDate
+  };
 }

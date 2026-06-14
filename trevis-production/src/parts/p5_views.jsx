@@ -13,46 +13,68 @@ export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, o
   
   // Phase 4B: Fetch coverage data for all students in this property
   // READ ONLY - no calculations, enriches students with coverage classification
-  // Use ref to persist coverage across renders
-  const coverageCache = useRef(new Map());
-  const [coverageVersion, setCoverageVersion] = useState(0);
-  const isFetchingRef = useRef(false);
+  const [coverageMap, setCoverageMap] = useState(new Map());
+  const [isLoadingCoverage, setIsLoadingCoverage] = useState(true);
   
   useEffect(() => {
+    let cancelled = false;
+    
     async function fetchCoverage() {
-      if (isFetchingRef.current) return; // Prevent duplicate fetches
-      isFetchingRef.current = true;
+      setIsLoadingCoverage(true);
+      const newCoverageMap = new Map();
       
-      const coverageMap = new Map();
+      // Get all REAL student IDs from this property (exclude VACANT placeholders)
+      const realStudents = prop.rooms.flatMap(r => 
+        r.students.filter(s => {
+          // CRITICAL: Skip synthetic vacant IDs and VACANT/VACATED status
+          const isVacantPlaceholder = s.id && (
+            String(s.id).startsWith('vacant-') || 
+            s.status === 'VACANT' || 
+            s.status === 'VACATED'
+          );
+          return !isVacantPlaceholder && s.id;
+        })
+      );
       
-      // Get all student IDs from this property
-      const allStudents = prop.rooms.flatMap(r => r.students);
+      console.log(`[Phase4B] Fetching coverage for ${realStudents.length} real students in ${name}`);
       
-      for (const student of allStudents) {
-        // Fetch coverage for all students (not just ACTIVE - let classifier decide)
-        if (student.id) {
-          try {
-            const coverageData = await CoverageDB.getStudentCoverageData(student.id);
-            if (coverageData && coverageData.status === 'ACTIVE') {
-              // Use statusClassifier to get coverage status - NO CALCULATIONS HERE
-              const classification = classifyStudent(coverageData);
-              coverageMap.set(student.id, classification);
-            }
-          } catch (err) {
-            // Silently handle errors for individual students
+      // Fetch coverage for all real students in parallel
+      const coveragePromises = realStudents.map(async (student) => {
+        try {
+          const coverageData = await CoverageDB.getStudentCoverageData(student.id);
+          if (coverageData && coverageData.status === 'ACTIVE') {
+            // Use statusClassifier to get coverage status - NO CALCULATIONS HERE
+            const classification = classifyStudent(coverageData);
+            return { studentId: student.id, classification };
           }
+        } catch (err) {
+          console.error(`[Phase4B] Coverage fetch failed for ${student.name}:`, err.message);
         }
-      }
+        return null;
+      });
       
-      coverageCache.current = coverageMap;
-      setCoverageVersion(v => v + 1); // Trigger re-render
-      isFetchingRef.current = false;
+      const results = await Promise.all(coveragePromises);
+      
+      // Build coverage map from results
+      results.forEach(result => {
+        if (result && !cancelled) {
+          newCoverageMap.set(result.studentId, result.classification);
+        }
+      });
+      
+      if (!cancelled) {
+        console.log(`[Phase4B] Coverage hydrated: ${newCoverageMap.size} students classified`);
+        setCoverageMap(newCoverageMap);
+        setIsLoadingCoverage(false);
+      }
     }
     
     if (prop && prop.rooms) {
       fetchCoverage();
     }
-  }, [name]); // Only refetch when property name changes
+    
+    return () => { cancelled = true; };
+  }, [name, prop]); // Refetch when property changes
   const pct = prop.expected > 0 ? ((prop.collected / prop.expected)*100).toFixed(1) : "0.0";
   const filtered = prop.rooms.filter(r =>
     !search || r.no.toLowerCase().includes(search.toLowerCase()) ||
@@ -88,25 +110,66 @@ export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, o
       </div>
       {filtered.length === 0 && <div style={{ padding:32,textAlign:"center",color:T.muted,fontSize:13 }}>No rooms match your search</div>}
       <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-        {filtered.map(room => <RoomRow key={room.id} room={room} ac={ac} propName={name} onStudentClick={onStudentClick} isAdmin={isAdmin} onRemoveRoom={onRemoveRoom} studentsWithCoverage={coverageCache.current} coverageVersion={coverageVersion} />)}
+        {filtered.map(room => <RoomRow key={room.id} room={room} ac={ac} propName={name} onStudentClick={onStudentClick} isAdmin={isAdmin} onRemoveRoom={onRemoveRoom} coverageMap={coverageMap} isLoadingCoverage={isLoadingCoverage} />)}
       </div>
     </div>
   );
 }
 
-function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom, studentsWithCoverage, coverageVersion }) {
+function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom, coverageMap, isLoadingCoverage }) {
   const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Phase 4B.1: Coverage-based room metrics (NOT payment-based)
+  // Get real students (exclude vacant placeholders)
   const real = room.students.filter(s=>s.status!=="VACANT"&&s.status!=="VACATED");
-  const paid = real.filter(s=>s.status==="PAID").length;
-  const issues = real.filter(s=>s.status!=="PAID").length;
-  const pct = real.length > 0 ? Math.round((paid/real.length)*100) : 0;
   const vacant = room.beds - real.length;
   
+  // CRITICAL: Aggregate room coverage from classifyStudent() results
+  // DO NOT use s.status (legacy payment status)
+  // Safety: Only calculate if coverageMap exists
+  const covered = coverageMap ? real.filter(s => {
+    const coverage = coverageMap.get(s.id);
+    // Covered = CURRENT + EXPIRING_SOON + DUE_TODAY
+    return coverage && ['CURRENT', 'EXPIRING_SOON', 'DUE_TODAY'].includes(coverage.status);
+  }).length : 0;
+  
+  const overdue = coverageMap ? real.filter(s => {
+    const coverage = coverageMap.get(s.id);
+    return coverage && coverage.status === 'OVERDUE';
+  }).length : 0;
+  
+  const expiringSoon = coverageMap ? real.filter(s => {
+    const coverage = coverageMap.get(s.id);
+    return coverage && coverage.status === 'EXPIRING_SOON';
+  }).length : 0;
+  
+  // Coverage rate = covered / occupied beds * 100
+  const coverageRate = real.length > 0 ? Math.round((covered / real.length) * 100) : 0;
+  
+  // Financial metrics (keep separate, still valid)
   const expected = room.beds * room.rent;
   const collected = real.reduce((sum, s) => sum + (s.paid || 0), 0);
   const outstanding = expected - collected;
+  
+  // Phase 4B.1: Comprehensive verification logging
+  console.log(`[Phase4B.1] ${room.no}:`, {
+    room: room.no,
+    coveredCount: covered,
+    overdueCount: overdue,
+    expiringSoonCount: expiringSoon,
+    dueTodayCount: real.filter(s => {
+      const coverage = coverageMap?.get(s.id);
+      return coverage && coverage.status === 'DUE_TODAY';
+    }).length,
+    occupiedBeds: real.length,
+    coverageRate: coverageRate,
+    // Financial (separate from coverage):
+    expected,
+    collected,
+    outstanding
+  });
 
   const handleRemoveClick = () => {
     if (real.length > 0) {
@@ -134,12 +197,20 @@ function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom, st
           <div style={{ fontSize:14,fontWeight:700,color:T.text }}>{room.no}</div>
           <div style={{ fontSize:11,color:T.muted,marginTop:2 }}>{room.beds} beds · ${room.rent}/bed · ${expected}/mo</div>
         </div>
-        <div className="pn-room-detail" style={{ fontSize:11,color:T.green }}>{paid} paid</div>
-        {issues>0 && <div className="pn-room-detail" style={{ background:T.redDim,color:T.red,padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:700 }}>{issues} ⚠</div>}
+        {/* Phase 4B.1: Coverage-based metrics (NOT payment-based) */}
+        {isLoadingCoverage ? (
+          <div className="pn-room-detail" style={{ fontSize:11,color:T.muted }}>Loading...</div>
+        ) : (
+          <>
+            <div className="pn-room-detail" style={{ fontSize:11,color:T.green }}>{covered} covered</div>
+            {overdue>0 && <div className="pn-room-detail" style={{ background:T.redDim,color:T.red,padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:700 }}>{overdue} overdue</div>}
+            {expiringSoon>0 && <div className="pn-room-detail" style={{ background:T.amberDim,color:T.amber,padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:700 }}>{expiringSoon} expiring</div>}
+          </>
+        )}
         {vacant>0 && <div className="pn-room-detail" style={{ background:T.amberDim,color:T.amber,padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:700 }}>{vacant} vacant</div>}
         <div style={{ width:80, display:"flex", alignItems:"center", gap:6 }}>
-          <div style={{flex:1}}><Bar pct={pct} color={ac.accent} /></div>
-          <span style={{fontSize:10,fontWeight:700,color:ac.accent}}>{pct}%</span>
+          <div style={{flex:1}}><Bar pct={coverageRate} color={ac.accent} /></div>
+          <span style={{fontSize:10,fontWeight:700,color:ac.accent}}>{coverageRate}%</span>
         </div>
         <span style={{ color:T.muted,fontSize:13 }}>{open?"▲":"▼"}</span>
       </div>
@@ -149,9 +220,12 @@ function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom, st
             const displayName = getDisplayName(s);
             const isClickable = s.status!=="VACANT"&&s.status!=="VACATED"&&!isUnassignedRecord(s);
             
-            // Phase 4B: Get coverage classification from service (READ ONLY - no calculations)
-            const coverage = studentsWithCoverage?.get(s.id);
+            // Phase 4B: Get coverage classification from hydrated map (READ ONLY - no calculations)
+            const coverage = coverageMap?.get(s.id);
             const coverageLabel = coverage?.displayLabel || null;
+            
+            // While loading coverage, don't show status for ACTIVE students (prevents mixed state)
+            const showLoading = isLoadingCoverage && s.status !== "VACANT" && s.status !== "VACATED";
             
             return (
               <div key={s.id} onClick={()=>isClickable&&onStudentClick&&onStudentClick(s,room,propName)}
@@ -164,19 +238,26 @@ function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom, st
                 <div style={{ fontSize:12,color:T.subtle,fontFamily:"'IBM Plex Mono',monospace" }}>{s.status==="VACANT"||isUnassignedRecord(s)?"—":`$${s.paid} paid${s.balance>0?` · $${s.balance} bal`:''}`}</div>
                 <div style={{ fontSize:11,color:T.muted }}>{s.date||"—"}</div>
                 <div style={{ justifySelf: "end", display:"flex", alignItems:"center", gap:8 }}>
-                  {/* Phase 4B: Display coverage label next to status badge (DISPLAY ONLY) */}
-                  {coverageLabel && (
-                    <span style={{ 
-                      fontSize:11, 
-                      fontWeight:600,
-                      color: coverage.status === 'CURRENT' ? '#22C55E' : 
-                             coverage.status === 'EXPIRING_SOON' ? '#F59E0B' : 
-                             coverage.status === 'DUE_TODAY' ? '#F97316' : '#EF4444'
-                    }}>
-                      {coverageLabel}
-                    </span>
+                  {/* Phase 4B: Display coverage label + badge from SAME classification source */}
+                  {showLoading ? (
+                    <span style={{ fontSize:11, color:T.muted }}>Loading...</span>
+                  ) : (
+                    <>
+                      {coverageLabel && (
+                        <span style={{ 
+                          fontSize:11, 
+                          fontWeight:600,
+                          color: coverage.status === 'CURRENT' ? '#22C55E' : 
+                                 coverage.status === 'EXPIRING_SOON' ? '#F59E0B' : 
+                                 coverage.status === 'DUE_TODAY' ? '#F97316' : '#EF4444'
+                        }}>
+                          {coverageLabel}
+                        </span>
+                      )}
+                      {/* Badge uses coverage status for ACTIVE students, legacy status for VACANT */}
+                      <Badge status={coverage?.status || s.status} />
+                    </>
                   )}
-                  <Badge status={s.status} />
                 </div>
               </div>
             );
@@ -192,12 +273,16 @@ function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom, st
                 <div style={{ fontSize:15, fontWeight:700, color:T.green, fontFamily:"'IBM Plex Mono',monospace" }}>${collected}</div>
               </div>
               <div>
-                <div style={{ fontSize:9, color:T.muted, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:3 }}>Outstanding</div>
-                <div style={{ fontSize:15, fontWeight:700, color:outstanding>0?T.red:T.green, fontFamily:"'IBM Plex Mono',monospace" }}>${outstanding}</div>
+                <div style={{ fontSize:9, color:T.muted, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:3 }}>
+                  {outstanding < 0 ? "Prepaid" : "Outstanding"}
+                </div>
+                <div style={{ fontSize:15, fontWeight:700, color:outstanding>0?T.red:outstanding<0?T.blue:T.green, fontFamily:"'IBM Plex Mono',monospace" }}>
+                  ${Math.abs(outstanding)}
+                </div>
               </div>
               <div>
-                <div style={{ fontSize:9, color:T.muted, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:3 }}>Rate</div>
-                <div style={{ fontSize:15, fontWeight:700, color:pct===100?T.green:T.amber }}>{pct}%</div>
+                <div style={{ fontSize:9, color:T.muted, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:3 }}>Coverage Rate</div>
+                <div style={{ fontSize:15, fontWeight:700, color:coverageRate===100?T.green:T.amber }}>{coverageRate}%</div>
               </div>
             </div>
             {isAdmin && !confirmDelete && (

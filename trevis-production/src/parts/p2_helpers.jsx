@@ -317,10 +317,19 @@ export function buildProps(rawProperties) {
 ═══════════════════════════════════════════════════════════ */
 export const Badge = ({ status }) => {
   const cfg = {
+    // Legacy payment-based statuses (deprecated in Phase 4)
     PAID:    { bg: T.greenDim, c: T.green, label:"Paid" },
     PARTIAL: { bg: T.amberDim, c: T.amber, label:"Partial" },
-    OVERDUE: { bg: T.redDim,   c: T.red,   label:"Overdue" },
+    
+    // Phase 4B: Coverage-based statuses (active)
+    CURRENT:       { bg: T.greenDim, c: T.green, label:"Current" },
+    EXPIRING_SOON: { bg: T.amberDim, c: T.amber, label:"Expiring Soon" },
+    DUE_TODAY:     { bg: "#F9731620", c: "#F97316", label:"Due Today" },
+    OVERDUE:       { bg: T.redDim,   c: T.red,   label:"Overdue" },
+    
+    // Special statuses
     VACANT:  { bg: T.purpleDim, c: T.purple, label:"Vacant" },
+    EXCLUDED: { bg: "#22222220", c: T.muted, label:"Inactive" },
   }[status] || { bg:"#22283620", c:T.muted, label: status };
   const isOverdue = status === "OVERDUE";
   return (
