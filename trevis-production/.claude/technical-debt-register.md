@@ -69,7 +69,13 @@ Legend: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low
 - **Fix:** Propagate the rebuild error to the caller and toast it; offer/auto-trigger
   `repairStudentCoverage`; consider doing the write + rebuild server-side in one RPC/transaction.
 
-## TD-6 🟠 No duplicate-submit guard on payments
+## TD-6 ✅ RESOLVED (Stage 3) — No duplicate-submit guard on payments
+> **Resolved 2026-06-15.** UI in-flight guards added to create (`isSubmitting`) and delete
+> (`isDeleting`); edit already guarded by `InlineEditField.isSaving`. Service-layer idempotency:
+> `recordPaymentWithCoverage` suppresses an identical payment (same student/amount/date) within a
+> 10s window. 2 tests in `duplicatePaymentProtection.test.js`. See
+> `STABILIZATION_TD6_DUPLICATE_PAYMENT_PROTECTION.md`. Original analysis below.
+
 - **Where:** `PaymentModal` / `handleRecordPayment` (App.jsx) — button not disabled during the
   async insert+rebuild.
 - **Risk:** Double-click ⇒ two payment rows ⇒ inflated coverage (deterministic rebuild faithfully

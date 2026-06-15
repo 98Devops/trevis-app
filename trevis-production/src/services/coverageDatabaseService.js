@@ -47,12 +47,35 @@ export async function recordPaymentWithCoverage({
   notes,
   recordedBy
 }) {
+  // TD-6: Duplicate-submit protection (defense-in-depth alongside the UI in-flight guard).
+  // If an identical payment (same student, amount, date) was recorded in the last few
+  // seconds, treat this as an accidental double-submit and return the existing row instead
+  // of inserting a second one. Without this, a double click would create two payment rows
+  // and the deterministic coverage rebuild would faithfully (and wrongly) sum both.
+  const amountNum = parseFloat(amount);
+  const dupWindowIso = new Date(Date.now() - 10000).toISOString(); // 10s window
+  const { data: recentDup } = await supabase
+    .from('payments')
+    .select('*')
+    .eq('student_id', studentId)
+    .eq('amount', amountNum)
+    .eq('payment_date', paymentDate)
+    .gte('created_at', dupWindowIso)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (recentDup && recentDup.length > 0) {
+    console.warn('[TD-6] Duplicate payment suppressed (identical student/amount/date within 10s).');
+    // Coverage already reflects the first insert; return it without re-inserting.
+    return { payment: recentDup[0], coverage: null, rebuildError: null, duplicateSuppressed: true };
+  }
+
   // 1. Insert payment record (without coverage calculation yet)
   const { data: payment, error: pErr } = await supabase
     .from('payments')
     .insert({
       student_id: studentId,
-      amount: parseFloat(amount),
+      amount: amountNum,
       payment_date: paymentDate,
       payment_method: paymentMethod,
       receipt_number: receiptNumber || null,

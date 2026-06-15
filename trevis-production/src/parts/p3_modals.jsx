@@ -273,6 +273,8 @@ export function AddRoomModal({ open, onClose, propertyId, propertyName, commonRe
 export function PaymentModal({ open, onClose, prop, onRecord, user, allProps }) {
   const [form, setForm] = useState({ student:"",amount:"",method:"Cash",notes:"",receipt:"",date:new Date().toISOString().split("T")[0],property:"" });
   const [done, setDone] = useState(false);
+  // TD-6: in-flight guard to prevent duplicate payment submission on double-click.
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const upd = (k,v) => setForm(f=>({...f,[k]:v}));
 
   if (!open) return null;
@@ -292,12 +294,20 @@ export function PaymentModal({ open, onClose, prop, onRecord, user, allProps }) 
   const backdatedMonth = isBackdated ? formatMonth(form.date) : null;
 
   const handleSubmit = async () => {
-    await onRecord(activeProp.name, form.student, {
-      amount: Number(form.amount), date: form.date, method: form.method,
-      receipt: form.receipt, notes: form.notes, recordedBy: user?.email || "system"
-    });
-    setDone(true);
-    setTimeout(() => { onClose(); setDone(false); setForm({ student:"",amount:"",method:"Cash",notes:"",receipt:"",date:new Date().toISOString().split("T")[0],property:"" }); }, 1500);
+    // TD-6: ignore re-entrant clicks while a submission is already in flight.
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await onRecord(activeProp.name, form.student, {
+        amount: Number(form.amount), date: form.date, method: form.method,
+        receipt: form.receipt, notes: form.notes, recordedBy: user?.email || "system"
+      });
+      setDone(true);
+      setTimeout(() => { onClose(); setDone(false); setIsSubmitting(false); setForm({ student:"",amount:"",method:"Cash",notes:"",receipt:"",date:new Date().toISOString().split("T")[0],property:"" }); }, 1500);
+    } catch (err) {
+      // onRecord normally surfaces its own errors; release the lock so the user can retry.
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -336,8 +346,8 @@ export function PaymentModal({ open, onClose, prop, onRecord, user, allProps }) 
                 <InputField label="Receipt #" value={form.receipt} onChange={v=>upd("receipt",v)} placeholder="Optional" />
               </div>
               <InputField label="Notes" value={form.notes} onChange={v=>upd("notes",v)} placeholder="Optional note…" />
-              <Btn accent={activeAc.accent||T.gold} disabled={!form.student||!form.amount} onClick={handleSubmit}
-                style={{ marginTop:4,width:"100%" }}>Confirm Payment</Btn>
+              <Btn accent={activeAc.accent||T.gold} disabled={!form.student||!form.amount||isSubmitting} onClick={handleSubmit}
+                style={{ marginTop:4,width:"100%" }}>{isSubmitting ? "Recording…" : "Confirm Payment"}</Btn>
             </div>
           </>
         )}
@@ -356,6 +366,8 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [editingPayment, setEditingPayment] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  // TD-6: in-flight guard so a double-click on Delete cannot fire deletePayment twice.
+  const [isDeleting, setIsDeleting] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [loadingPayments, setLoadingPayments] = useState(true);
   const [showTransferModal, setShowTransferModal] = useState(false);
@@ -413,6 +425,9 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
   };
 
   const handleDeletePayment = async (paymentId) => {
+    // TD-6: ignore re-entrant clicks while a delete is already in flight.
+    if (isDeleting) return;
+    setIsDeleting(true);
     try {
       const { deletePayment } = await import('./p1_imports_context.jsx');
       const { error, rebuildError } = await deletePayment(paymentId);
@@ -439,6 +454,9 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
       console.error('Delete payment failed:', err);
       alert('Failed to delete payment: ' + (err.message || 'Unknown error'));
       setConfirmDelete(null);
+    } finally {
+      // TD-6: always release the in-flight lock.
+      setIsDeleting(false);
     }
   };
 
@@ -765,8 +783,8 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
                             <div style={{ background:T.redDim,border:`1px solid ${T.red}40`,borderRadius:8,padding:10 }}>
                               <div style={{ fontSize:12,color:T.red,fontWeight:600,marginBottom:8 }}>Delete payment of {fmt(p.amount)}?</div>
                               <div style={{ display:"flex",gap:6 }}>
-                                <button onClick={()=>setConfirmDelete(null)} style={{ flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:6,padding:"4px 8px",color:T.text,fontSize:11,cursor:"pointer",fontFamily:font }}>Cancel</button>
-                                <button onClick={()=>handleDeletePayment(p.id)} style={{ flex:1,background:T.red,border:"none",borderRadius:6,padding:"4px 8px",color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:font }}>Delete</button>
+                                <button onClick={()=>setConfirmDelete(null)} disabled={isDeleting} style={{ flex:1,background:T.surface,border:`1px solid ${T.border}`,borderRadius:6,padding:"4px 8px",color:T.text,fontSize:11,cursor:isDeleting?"not-allowed":"pointer",fontFamily:font }}>Cancel</button>
+                                <button onClick={()=>handleDeletePayment(p.id)} disabled={isDeleting} style={{ flex:1,background:isDeleting?T.border:T.red,border:"none",borderRadius:6,padding:"4px 8px",color:isDeleting?T.muted:"#fff",fontSize:11,fontWeight:600,cursor:isDeleting?"not-allowed":"pointer",fontFamily:font }}>{isDeleting?"Deleting…":"Delete"}</button>
                               </div>
                             </div>
                           ) : (
