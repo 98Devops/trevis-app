@@ -1,5 +1,14 @@
 # Sprint 5.5: Flexible Rent Cycle Engine
 
+> **⚠️ Correction (Stabilization TD-1, 2026-06-15):** This planning doc's code samples
+> reference `src/services/coverageService.js` as the implementation target. That file was
+> an early, **wrong-math** draft (`Math.floor`, no early-payment/prepaid preservation,
+> wrong column names) that was never wired up and has been archived to
+> `src/services/_archive/coverageService.legacy.js` (do not import). The actual,
+> authoritative implementation is `rentCycleCalculator.js` → `paymentProcessor.js` →
+> `statusClassifier.js` → `coverageDatabaseService.js`. Treat the architecture/goals below
+> as accurate; treat `coverageService.js` references as historical only.
+
 ## Executive Summary
 
 **Critical Business Model Fix**: The current system uses calendar-month billing (June 1-30, July 1-31) which assumes all students pay on the 1st. This is fundamentally incorrect for boarding house operations where each student has their own billing cycle based on when they pay.

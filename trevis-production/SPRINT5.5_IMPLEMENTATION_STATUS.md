@@ -1,5 +1,14 @@
 veri# Sprint 5.5: Flexible Rent Cycle Engine - Implementation Status
 
+> **⚠️ Correction (Stabilization TD-1, 2026-06-15):** Section 2 below ("Coverage Service
+> Layer") describes `src/services/coverageService.js` as complete. That file was a
+> **wrong-math** draft (`Math.floor`, no early-payment/prepaid preservation, wrong column
+> names `date`/`method`, different status thresholds) that was never wired into the app and
+> has been archived to `src/services/_archive/coverageService.legacy.js` (do not import).
+> The implementation that actually shipped is `rentCycleCalculator.js` →
+> `paymentProcessor.js` → `statusClassifier.js` → `coverageDatabaseService.js`. Read
+> Section 2 as historical/superseded.
+
 ## ✅ COMPLETED WORK
 
 ### 1. Database Migration (SQL) ✓ COMPLETE

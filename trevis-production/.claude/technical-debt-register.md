@@ -8,7 +8,17 @@ Legend: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low
 
 ---
 
-## TD-1 🔴 Dual coverage engines (wrong-math trap)
+## TD-1 ✅ RESOLVED (Stage 4) — Dual coverage engines (wrong-math trap)
+> **Resolved 2026-06-15.** `coverageService.js` had zero source imports (verified via
+> `grep -rn coverageService src`). Moved via `git mv` to
+> `src/services/_archive/coverageService.legacy.js` with a "DEAD CODE — DO NOT IMPORT"
+> banner explaining the wrong-math behavior and pointing to the authoritative engine
+> (`rentCycleCalculator.js` → `paymentProcessor.js` → `statusClassifier.js` →
+> `coverageDatabaseService.js`). Stale Sprint 5.5 docs
+> (`SPRINT5.5_FLEXIBLE_RENT_CYCLES.md`, `SPRINT5.5_IMPLEMENTATION_STATUS.md`) corrected
+> with notices. 150/150 tests still pass (no test ever depended on the file). See
+> `STABILIZATION_TD1_ORPHANED_ENGINE_REMOVED.md`. Original analysis below.
+
 - **Where:** `src/services/coverageService.js` vs the authoritative
   `rentCycleCalculator.js` + `paymentProcessor.js` + `statusClassifier.js` + `coverageDatabaseService.js`.
 - **What:** `coverageService.js` computes `daysCovered = Math.floor(...)` (engine uses `Math.round`),

@@ -1,9 +1,38 @@
 /**
+ * ============================================================================
+ * ARCHIVED — DEAD CODE — DO NOT IMPORT (Stabilization TD-1, 2026-06-15)
+ * ============================================================================
+ *
+ * This file is the ORIGINAL Sprint 5.5 coverage engine and is SUPERSEDED.
+ * It was orphaned (zero imports anywhere in src/) at the time it was moved
+ * here, and is kept only for historical reference. It contains the
+ * WRONG-MATH version of coverage calculation:
+ *
+ *  - daysCovered = Math.floor(...)            (engine uses Math.round)
+ *  - coverage_start = payment_date, always    (no early-payment / prepaid
+ *                                               day preservation on renewal)
+ *  - writes columns `date` / `method`         (real schema uses
+ *                                               `payment_date` / `payment_method`)
+ *  - status mapping `daysCovered > 7 => 'PAID'` (different thresholds than
+ *                                               the authoritative classifier)
+ *
+ * The authoritative coverage engine is:
+ *   rentCycleCalculator.js -> paymentProcessor.js -> statusClassifier.js
+ *   -> coverageDatabaseService.js (the only service allowed to touch
+ *      Supabase for coverage)
+ *
+ * Re-introducing this file reintroduces the exact prepaid-day-loss and
+ * off-by-one-day bugs Phase 1/2 fixed, plus a second contradictory status
+ * definition (TD-1, TD-9). Do not import. Do not resurrect.
+ * ============================================================================
+ */
+
+/**
  * Coverage Service - Sprint 5.5 Flexible Rent Cycle Engine
  * Handles calculation of coverage periods for flexible billing
  */
 
-import { supabase, isConfigured } from '../lib/supabase';
+import { supabase, isConfigured } from '../../lib/supabase';
 
 /**
  * Calculate coverage period from payment
