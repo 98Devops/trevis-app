@@ -435,7 +435,8 @@ function AppInner() {
       {profileStudent && <StudentProfile student={profileStudent} room={profileRoom} propName={profilePropName}
         onClose={()=>setProfileStudent(null)}
         onRecordPay={()=>{setPaymentProp(visibleProps.find(p=>p.name===profilePropName));setShowPayment(true);setProfileStudent(null);}}
-        onRemove={handleRemoveStudent} isAdmin={isAdmin} user={user} refresh={refresh} />}
+        onRemove={handleRemoveStudent} isAdmin={isAdmin} user={user} refresh={refresh}
+        setCoverageCache={setCoverageCache} setCoverageCacheTimestamp={setCoverageCacheTimestamp} />}
 
       {/* Report download modal */}
       {showReportModal && <ReportDownloadModal props={visibleProps} user={user}

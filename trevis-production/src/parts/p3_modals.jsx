@@ -349,7 +349,7 @@ export function PaymentModal({ open, onClose, prop, onRecord, user, allProps }) 
 /* ═══════════════════════════════════════════════════════════
    STUDENT PROFILE PANEL (slide-in)
 ═══════════════════════════════════════════════════════════ */
-export function StudentProfile({ student, room, propName, onClose, onRecordPay, onRemove, isAdmin, user, refresh }) {
+export function StudentProfile({ student, room, propName, onClose, onRecordPay, onRemove, isAdmin, user, refresh, setCoverageCache, setCoverageCacheTimestamp }) {
   if (!student) return null;
   const ac = T.prop[propName] || { accent:T.gold };
   const balance = room.rent - student.paid;
@@ -390,11 +390,19 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
     const updates = { [field]: value };
     const { error } = await updatePayment(paymentId, updates, user?.email || 'system');
     if (!error) {
+      // Phase 4B.11: Invalidate coverage cache after payment edit
+      if (setCoverageCache && setCoverageCacheTimestamp) {
+        console.log('[Phase4B.11] Invalidating coverage cache after payment edit');
+        setCoverageCache(new Map());
+        setCoverageCacheTimestamp(Date.now());
+      }
       // Refresh payment history
       const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
       const { data } = await getPaymentsByStudent(student.id);
       setPaymentHistory(data || []);
       setEditingPayment(null);
+      // Trigger full app refresh to update UI
+      if (refresh) refresh();
     }
   };
 
@@ -404,6 +412,12 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
       const { error } = await deletePayment(paymentId);
       if (error) throw error;
       // Phase 4B.3: deletePayment now calls rebuildStudentCoverage automatically
+      // Phase 4B.11: Invalidate coverage cache after payment delete
+      if (setCoverageCache && setCoverageCacheTimestamp) {
+        console.log('[Phase4B.11] Invalidating coverage cache after payment delete');
+        setCoverageCache(new Map());
+        setCoverageCacheTimestamp(Date.now());
+      }
       // Refresh payment history
       const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
       const { data } = await getPaymentsByStudent(student.id);
