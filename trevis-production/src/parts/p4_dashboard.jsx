@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { T, font, fmt, Badge, Stat, Bar, Btn, formatDateLong } from "./p2_helpers.jsx";
 import * as CoverageDB from "../services/coverageDatabaseService.js";
+import { buildAttentionList, countAttentionByProperty } from "../services/dashboardAttention.js";
 
 /* ═══════════════════════════════════════════════════════════
    DASHBOARD VIEW
@@ -14,23 +15,34 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
   // READ ONLY - no calculations, display values from coverageDatabaseService
   const [coverageKPIs, setCoverageKPIs] = useState(null);
   const [isLoadingKPIs, setIsLoadingKPIs] = useState(true);
-  
+
+  // TD-2 (Stabilization): single source of truth for the Attention table,
+  // per-row badges, and per-property Alerts count. Fetched ONCE here (one query,
+  // not N+1) alongside the KPI strip so every status region on this screen reads
+  // from the SAME coverage engine. Refetches on the same [props] dependency, so
+  // it stays in sync with mutations (which already change props / invalidate cache).
+  const [coverageStudents, setCoverageStudents] = useState(null);
+
   useEffect(() => {
     let cancelled = false;
     const timerId = `getDashboardKPIs-${Date.now()}`;
-    
+
     async function fetchKPIs() {
       setIsLoadingKPIs(true);
       console.time(`[Perf] ${timerId}`);
-      const kpis = await CoverageDB.getDashboardKPIs();
+      const [kpis, students] = await Promise.all([
+        CoverageDB.getDashboardKPIs(),
+        CoverageDB.getAllStudentsCoverage(),
+      ]);
       console.timeEnd(`[Perf] ${timerId}`);
       if (!cancelled) {
         setCoverageKPIs(kpis);
+        setCoverageStudents(students);
         setIsLoadingKPIs(false);
       }
     }
     fetchKPIs();
-    
+
     return () => { cancelled = true; };
   }, [props]); // Refetch when properties change
 
@@ -47,14 +59,42 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
   const monthYear = now.toLocaleString("en-US", { month:"long", year:"numeric" });
   const todayLabel = formatDateLong(now);
 
-  const allOverdue = props.flatMap(p => p.overdue.map(s => ({ ...s, property: p.name })));
+  // TD-2: Attention list derived from the COVERAGE engine (single source of truth),
+  // not the legacy month-based `p.overdue`. A student needs attention when their
+  // coverage classification is OVERDUE / DUE_TODAY / EXPIRING_SOON — the same
+  // definition the KPI strip uses, so the count and the list can no longer diverge.
+  // Falls back to the legacy month-based list only when coverage data is
+  // unavailable (demo/unconfigured/fetch-failed), preserving demo + test behavior.
+  const coverageReady = Array.isArray(coverageStudents);
+
+  const allOverdue = useMemo(() => {
+    if (!coverageReady) {
+      // Legacy fallback (demo mode / coverage fetch failed)
+      return props.flatMap(p => p.overdue.map(s => ({
+        ...s, property: p.name, source: "legacy",
+      })));
+    }
+    return buildAttentionList(coverageStudents);
+  }, [coverageReady, coverageStudents, props]);
+
   const sorted = [...allOverdue].sort((a,b) => {
     if (sortCol==="name") return sortDir * a.name.localeCompare(b.name);
     if (sortCol==="property") return sortDir * a.property.localeCompare(b.property);
-    if (sortCol==="balance") return sortDir * ((a.roomRent-a.paid) - (b.roomRent-b.paid));
+    if (sortCol==="balance") {
+      const ab = a.source === "coverage" ? a.outstanding : (a.roomRent - a.paid);
+      const bb = b.source === "coverage" ? b.outstanding : (b.roomRent - b.paid);
+      return sortDir * (ab - bb);
+    }
     return 0;
   });
   const toggleSort = (col) => { if(sortCol===col) setSortDir(d=>-d); else { setSortCol(col); setSortDir(1); } };
+
+  // TD-2: per-property attention count, also coverage-derived, for the card "Alerts".
+  const attentionByProperty = useMemo(
+    () => (coverageReady ? countAttentionByProperty(allOverdue) : {}),
+    [coverageReady, allOverdue]
+  );
+  const attentionCount = coverageReady ? allOverdue.length : props.reduce((a,p)=>a+p.overdue.length,0);
 
   return (
     <div>
@@ -136,7 +176,8 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
 
       {/* Collection bar chart — grouped bars */}
       <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:16, padding:24, marginBottom:20 }}>
-        <div style={{ fontSize:14, fontWeight:700, color:T.text, marginBottom:20 }}>Collected vs Expected by Property</div>
+        <div style={{ fontSize:14, fontWeight:700, color:T.text, marginBottom:4 }}>Collected vs Expected by Property</div>
+        <div style={{ fontSize:11, color:T.muted, marginBottom:16 }}>Monthly cash basis (this calendar month) — separate from coverage status</div>
         {/* Desktop: vertical grouped bars */}
         <div className="pn-chart-desktop" style={{ display:"flex", gap:32, alignItems:"flex-end", minHeight:240, padding:"0 8px" }}>
           {props.map(p => {
@@ -223,11 +264,18 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
               </div>
               <Bar pct={Number(pct)} color={ac.accent} />
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8, marginTop:16 }}>
+                {/* TD-2: "Collected" / "Arrears (mo)" are MONTHLY CASH figures (cash-basis,
+                    by design — see Sprint 5.5 separation of concerns), explicitly labelled
+                    as monthly so they're not confused with coverage status. "Alerts" is the
+                    coverage-derived attention count (same engine as the KPI strip). */}
                 {[
-                  { label:"Collected", val:fmt(p.collected), c:T.green, onClick:null },
-                  { label:"Arrears", val:fmt(arrears), c: arrears>0?T.red:T.green, onClick: arrears>0 ? (e)=>{e.stopPropagation();onPropertyCardClick&&onPropertyCardClick(p.name);} : null },
+                  { label:"Collected (mo)", val:fmt(p.collected), c:T.green, onClick:null },
+                  { label:"Arrears (mo)", val:fmt(arrears), c: arrears>0?T.red:T.green, onClick: arrears>0 ? (e)=>{e.stopPropagation();onPropertyCardClick&&onPropertyCardClick(p.name);} : null },
                   { label:"Vacant", val:p.vacantBeds, c:p.vacantBeds>0?T.amber:T.green, onClick:null },
-                  { label:"Alerts", val:p.overdue.length, c:p.overdue.length>0?T.red:T.green, onClick: p.overdue.length>0 ? (e)=>{e.stopPropagation();onPropertyCardClick&&onPropertyCardClick(p.name);} : null },
+                  (() => {
+                    const alerts = coverageReady ? (attentionByProperty[p.name] || 0) : p.overdue.length;
+                    return { label:"Alerts", val:alerts, c:alerts>0?T.red:T.green, onClick: alerts>0 ? (e)=>{e.stopPropagation();onPropertyCardClick&&onPropertyCardClick(p.name);} : null };
+                  })(),
                 ].map(x => (
                   <div key={x.label} onClick={x.onClick} style={{ cursor: x.onClick ? "pointer" : "default" }}>
                     <div style={{ fontSize:9, color:T.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:3 }}>{x.label}</div>
@@ -244,12 +292,12 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
       <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:16, overflow:"hidden" }}>
         <div style={{ padding:"18px 24px", borderBottom:`1px solid ${T.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div style={{ fontSize:14, fontWeight:700, color:T.text }}>⚠ Attention Required</div>
-          <div style={{ background:T.redDim, color:T.red, padding:"2px 10px", borderRadius:20, fontSize:11, fontWeight:700 }}>{totals.overdue} tenants</div>
+          <div style={{ background:T.redDim, color:T.red, padding:"2px 10px", borderRadius:20, fontSize:11, fontWeight:700 }}>{attentionCount} tenants</div>
         </div>
         {/* Desktop table */}
         <div className="pn-attn-table">
           <div style={{ display:"grid", gridTemplateColumns:"2fr 1.2fr 1fr 1fr 1fr", gap:8, padding:"10px 24px", background:T.surface, borderBottom:`1px solid ${T.border}` }}>
-            {[["Name","name"],["Property","property"],["Rent",""],["Balance","balance"],["Status",""]].map(([h,col]) => (
+            {[["Name","name"],["Property","property"],["Rent",""],["Outstanding","balance"],["Status",""]].map(([h,col]) => (
               <div key={h} onClick={()=>col&&toggleSort(col)} style={{ fontSize:10, color:T.muted, textTransform:"uppercase", letterSpacing:"0.1em",
                 fontWeight:600, cursor:col?"pointer":"default" }}>{h}{sortCol===col?(sortDir===1?" ▲":" ▼"):""}</div>
             ))}
@@ -263,12 +311,14 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
                 onMouseEnter={e=>e.currentTarget.style.background=T.hover} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                 <div>
                   <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{s.name}</div>
-                  <div style={{ fontSize:11, color:T.muted }}>{s.room}</div>
+                  <div style={{ fontSize:11, color:T.muted }}>{s.room}{s.source==="coverage" && s.daysLabel ? ` · ${s.daysLabel}` : ""}</div>
                 </div>
                 <div style={{ fontSize:12, color:T.subtle }}>{s.property}</div>
                 <div style={{ fontSize:12, color:T.subtle, fontFamily:"'IBM Plex Mono',monospace" }}>{fmt(s.roomRent)}/mo</div>
-                <div style={{ fontSize:12, fontWeight:700, color:T.red, fontFamily:"'IBM Plex Mono',monospace" }}>-{fmt(s.roomRent - s.paid)}</div>
-                <Badge status={s.status} />
+                <div style={{ fontSize:12, fontWeight:700, color:T.red, fontFamily:"'IBM Plex Mono',monospace" }}>
+                  {s.source==="coverage" ? (s.outstanding>0 ? `-${fmt(s.outstanding)}` : "—") : `-${fmt(s.roomRent - s.paid)}`}
+                </div>
+                <Badge status={s.source==="coverage" ? s.coverageStatus : s.status} />
               </div>
             ))}
           </div>
@@ -278,14 +328,16 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
           {sorted.length === 0 ? (
             <div style={{ padding:20, textAlign:"center", color:T.muted, fontSize:13 }}>🎉 No outstanding issues!</div>
           ) : sorted.map(s => (
-            <div key={s.id+"m"} onClick={()=>onStudentClick&&onStudentClick(s,{no:s.room,rent:s.rent},s.property)} style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:10, padding:14, cursor:"pointer" }}>
+            <div key={s.id+"m"} onClick={()=>onStudentClick&&onStudentClick(s,{no:s.room,rent:s.roomRent},s.property)} style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:10, padding:14, cursor:"pointer" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
                 <div style={{ fontSize:14, fontWeight:700, color:T.text }}>{s.name}</div>
-                <Badge status={s.status} />
+                <Badge status={s.source==="coverage" ? s.coverageStatus : s.status} />
               </div>
               <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
-                <span style={{ color:T.muted }}>{s.property} · {s.room}</span>
-                <span style={{ color:T.red, fontWeight:700, fontFamily:"'IBM Plex Mono',monospace" }}>-{fmt(s.roomRent - s.paid)}</span>
+                <span style={{ color:T.muted }}>{s.property} · {s.room}{s.source==="coverage" && s.daysLabel ? ` · ${s.daysLabel}` : ""}</span>
+                <span style={{ color:T.red, fontWeight:700, fontFamily:"'IBM Plex Mono',monospace" }}>
+                  {s.source==="coverage" ? (s.outstanding>0 ? `-${fmt(s.outstanding)}` : "—") : `-${fmt(s.roomRent - s.paid)}`}
+                </span>
               </div>
             </div>
           ))}

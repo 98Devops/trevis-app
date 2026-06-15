@@ -32,7 +32,19 @@ Legend: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low
   header banner. Update `SPRINT5.5_IMPLEMENTATION_STATUS.md` / `SPRINT5.5_FLEXIBLE_RENT_CYCLES.md`
   which still point at it. Verify no import via `grep -rn coverageService src`.
 
-## TD-2 🔴 Two clocks on the Dashboard (coverage KPI vs month-based table)
+## TD-2 ✅ RESOLVED (Stage 5) — Two clocks on the Dashboard (coverage KPI vs month-based table)
+> **Resolved 2026-06-15.** The Attention Required table (rows + count + badges), the
+> per-property card "Alerts" count, and the mobile cards now derive from the SAME
+> coverage engine as the KPI strip (`statusClassifier.classifyStudent`), via a single
+> `getAllStudentsCoverage()` fetch (no N+1) and a pure, tested helper
+> `src/services/dashboardAttention.js` (`buildAttentionList` / `countAttentionByProperty`).
+> Attention "Balance" → "Outstanding" = days_overdue × daily_rate. Cash figures
+> (Collected/Arrears/bar chart) kept but relabelled "(mo) / monthly cash basis" so
+> they're not confused with status. Legacy month list retained only as a demo/fetch-failed
+> fallback. 10 new tests in `dashboardAttention.test.js`; 160/160 passing. See
+> `STABILIZATION_TD2_DASHBOARD_UNIFICATION.md`. Original analysis below.
+
+
 - **Where:** `src/parts/p4_dashboard.jsx`. Top KPI strip ← `getDashboardKPIs` (coverage). Property
   cards "Arrears"/"Alerts", the bar chart, and the **Attention Required** table ← `buildProps`
   month status (`paid>=rent?PAID:...`).
