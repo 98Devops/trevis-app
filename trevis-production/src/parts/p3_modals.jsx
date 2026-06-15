@@ -388,7 +388,7 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
   const handleEditPayment = async (paymentId, field, value) => {
     const { updatePayment } = await import('./p1_imports_context.jsx');
     const updates = { [field]: value };
-    const { error } = await updatePayment(paymentId, updates, user?.email || 'system');
+    const { error, rebuildError } = await updatePayment(paymentId, updates, user?.email || 'system');
     if (!error) {
       // Phase 4B.11: Invalidate coverage cache after payment edit
       if (setCoverageCache && setCoverageCacheTimestamp) {
@@ -403,13 +403,19 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
       setEditingPayment(null);
       // Trigger full app refresh to update UI
       if (refresh) refresh();
+      // TD-5: surface coverage rebuild failure instead of reporting a clean success
+      if (rebuildError) {
+        alert('Payment saved, but the coverage update failed. Coverage may be out of date — please use "Repair coverage" or try again.\n\nDetails: ' + (rebuildError.message || 'Unknown error'));
+      }
+    } else {
+      alert('Failed to save payment: ' + (error.message || 'Unknown error'));
     }
   };
 
   const handleDeletePayment = async (paymentId) => {
     try {
       const { deletePayment } = await import('./p1_imports_context.jsx');
-      const { error } = await deletePayment(paymentId);
+      const { error, rebuildError } = await deletePayment(paymentId);
       if (error) throw error;
       // Phase 4B.3: deletePayment now calls rebuildStudentCoverage automatically
       // Phase 4B.11: Invalidate coverage cache after payment delete
@@ -425,6 +431,10 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
       setConfirmDelete(null);
       // Trigger full app refresh to update UI
       if (refresh) refresh();
+      // TD-5: surface coverage rebuild failure instead of reporting a clean success
+      if (rebuildError) {
+        alert('Payment deleted, but the coverage update failed. Coverage may be out of date — please use "Repair coverage" or try again.\n\nDetails: ' + (rebuildError.message || 'Unknown error'));
+      }
     } catch (err) {
       console.error('Delete payment failed:', err);
       alert('Failed to delete payment: ' + (err.message || 'Unknown error'));
@@ -725,9 +735,14 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
                               onSave={async (updated) => {
                                 try {
                                   const { updatePayment } = await import('./p1_imports_context.jsx');
-                                  const { error: updateError } = await updatePayment(p.id, updated, user?.email || 'system');
+                                  const { error: updateError, rebuildError } = await updatePayment(p.id, updated, user?.email || 'system');
                                   if (updateError) throw updateError;
                                   // Phase 4B.3: updatePayment now calls rebuildStudentCoverage automatically
+                                  // Phase 4B.11: Invalidate coverage cache after payment edit
+                                  if (setCoverageCache && setCoverageCacheTimestamp) {
+                                    setCoverageCache(new Map());
+                                    setCoverageCacheTimestamp(Date.now());
+                                  }
                                   // Refresh payment history
                                   const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
                                   const { data } = await getPaymentsByStudent(student.id);
@@ -735,6 +750,10 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
                                   setEditingPayment(null);
                                   // Trigger full app refresh to update UI
                                   if (refresh) refresh();
+                                  // TD-5: surface coverage rebuild failure instead of reporting clean success
+                                  if (rebuildError) {
+                                    alert('Payment saved, but the coverage update failed. Coverage may be out of date — please use "Repair coverage" or try again.\n\nDetails: ' + (rebuildError.message || 'Unknown error'));
+                                  }
                                 } catch (err) {
                                   console.error('Edit payment failed:', err);
                                   alert('Failed to save payment: ' + (err.message || 'Unknown error'));
@@ -761,13 +780,22 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
                                       onSave={async (newValue) => {
                                         try {
                                           const { updatePayment } = await import('./p1_imports_context.jsx');
-                                          const { error: updateError } = await updatePayment(p.id, { amount: Number(newValue) }, user?.email || 'system');
+                                          const { error: updateError, rebuildError } = await updatePayment(p.id, { amount: Number(newValue) }, user?.email || 'system');
                                           if (updateError) throw updateError;
                                           // Phase 4B.3: updatePayment now calls rebuildStudentCoverage automatically
+                                          // Phase 4B.11: Invalidate coverage cache after payment edit
+                                          if (setCoverageCache && setCoverageCacheTimestamp) {
+                                            setCoverageCache(new Map());
+                                            setCoverageCacheTimestamp(Date.now());
+                                          }
                                           const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
                                           const { data } = await getPaymentsByStudent(student.id);
                                           setPaymentHistory(data || []);
                                           if (refresh) refresh();
+                                          // TD-5: value saved; warn if coverage rebuild failed (do not revert the saved value)
+                                          if (rebuildError) {
+                                            alert('Amount saved, but the coverage update failed. Coverage may be out of date — please use "Repair coverage" or try again.\n\nDetails: ' + (rebuildError.message || 'Unknown error'));
+                                          }
                                           return { success: true };
                                         } catch (err) {
                                           return { success: false, error: err.message };
@@ -788,13 +816,22 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
                                         onSave={async (newValue) => {
                                           try {
                                             const { updatePayment } = await import('./p1_imports_context.jsx');
-                                            const { error: updateError } = await updatePayment(p.id, { payment_date: newValue }, user?.email || 'system');
+                                            const { error: updateError, rebuildError } = await updatePayment(p.id, { payment_date: newValue }, user?.email || 'system');
                                             if (updateError) throw updateError;
                                             // Phase 4B.3: updatePayment now calls rebuildStudentCoverage automatically
+                                            // Phase 4B.11: Invalidate coverage cache after payment edit
+                                            if (setCoverageCache && setCoverageCacheTimestamp) {
+                                              setCoverageCache(new Map());
+                                              setCoverageCacheTimestamp(Date.now());
+                                            }
                                             const { getPaymentsByStudent } = await import('./p1_imports_context.jsx');
                                             const { data } = await getPaymentsByStudent(student.id);
                                             setPaymentHistory(data || []);
                                             if (refresh) refresh();
+                                            // TD-5: value saved; warn if coverage rebuild failed (do not revert the saved value)
+                                            if (rebuildError) {
+                                              alert('Date saved, but the coverage update failed. Coverage may be out of date — please use "Repair coverage" or try again.\n\nDetails: ' + (rebuildError.message || 'Unknown error'));
+                                            }
                                             return { success: true };
                                           } catch (err) {
                                             return { success: false, error: err.message };

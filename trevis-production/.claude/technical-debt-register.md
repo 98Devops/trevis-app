@@ -53,7 +53,13 @@ Legend: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low
 - **Fix:** Use coverage classification for the global list too (it already fetches per-property
   coverage elsewhere; extend to the global list or fetch once at app level).
 
-## TD-5 🟠 Best-effort coverage rebuild swallows errors (silent failure)
+## TD-5 ✅ RESOLVED (Stage 2) — Best-effort coverage rebuild swallows errors (silent failure)
+> **Resolved 2026-06-15.** `paymentService` (`rebuildCoverageSafely`, one retry) and
+> `coverageDatabaseService.recordPaymentWithCoverage` now return `rebuildError`; all UI handlers
+> surface it (toast/alert) instead of reporting clean success. Missing cache invalidation in inline
+> edits also fixed. 5 tests in `paymentRebuildFailure.test.js`. See
+> `STABILIZATION_TD5_SILENT_REBUILD_FAILURES.md`. Original analysis below.
+
 - **Where:** `paymentService.updatePayment` / `deletePayment` — `try { rebuildStudentCoverage } 
   catch { console.error(...) }` with comment "don't fail the update."
 - **What:** If the rebuild throws (network, room rent missing, etc.), the payment row is already

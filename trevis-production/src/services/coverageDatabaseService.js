@@ -69,9 +69,24 @@ export async function recordPaymentWithCoverage({
   }
 
   // 2. Rebuild coverage from ALL payments (ensures consistency)
-  const coverage = await rebuildStudentCoverage(studentId);
+  // TD-5: The payment row already exists at this point. If the rebuild fails we must
+  // NOT throw it away or bubble a raw exception that hides the fact the payment was
+  // recorded. We surface `rebuildError` so the caller can warn the user that coverage
+  // may be stale (and offer a repair) instead of reporting a clean success.
+  let coverage = null;
+  let rebuildError = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      coverage = await rebuildStudentCoverage(studentId);
+      rebuildError = null;
+      break;
+    } catch (err) {
+      rebuildError = err;
+      console.error(`[TD-5] Coverage rebuild failed after payment create (attempt ${attempt}/2):`, err);
+    }
+  }
 
-  return { payment, coverage };
+  return { payment, coverage, rebuildError };
 }
 
 /**

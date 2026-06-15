@@ -73,21 +73,45 @@ export async function updatePayment(paymentId, updates, userId) {
     .from('payments')
     .update(payload)
     .eq('id', paymentId);
-  
+
   if (error) {
     return { data: null, error };
   }
 
   // Phase 4B.3: Rebuild coverage from payment history after update
-  try {
-    const { rebuildStudentCoverage } = await import('./coverageDatabaseService.js');
-    await rebuildStudentCoverage(payment.student_id);
-  } catch (rebuildErr) {
-    console.error('[Phase4B.3] Coverage rebuild failed after payment update:', rebuildErr);
-    // Don't fail the update if coverage rebuild fails - log and continue
-  }
+  // TD-5: Coverage rebuild failures must NOT be silent. The payment row write has
+  // already succeeded, so we surface the rebuild failure via `rebuildError` instead
+  // of throwing it away. The caller is responsible for telling the user that coverage
+  // may be stale and offering a repair, rather than reporting a clean success.
+  const rebuildResult = await rebuildCoverageSafely(payment.student_id, 'update');
 
-  return { data: true, error: null };
+  return { data: true, error: null, rebuildError: rebuildResult.error };
+}
+
+/**
+ * Rebuild a student's coverage with one automatic retry, never throwing.
+ *
+ * TD-5: Centralises the post-mutation coverage rebuild so create/edit/delete share
+ * identical, non-silent failure handling. Returns a structured result; the caller
+ * decides how to surface a non-null `error` to the user.
+ *
+ * @param {string} studentId
+ * @param {string} context - label for logs ('create' | 'update' | 'delete')
+ * @returns {Promise<{ ok: boolean, error: Error|null }>}
+ */
+async function rebuildCoverageSafely(studentId, context) {
+  const { rebuildStudentCoverage } = await import('./coverageDatabaseService.js');
+  let lastErr = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      await rebuildStudentCoverage(studentId);
+      return { ok: true, error: null };
+    } catch (rebuildErr) {
+      lastErr = rebuildErr;
+      console.error(`[TD-5] Coverage rebuild failed after payment ${context} (attempt ${attempt}/2):`, rebuildErr);
+    }
+  }
+  return { ok: false, error: lastErr };
 }
 
 export async function deletePayment(paymentId) {
@@ -108,21 +132,16 @@ export async function deletePayment(paymentId) {
     .from('payments')
     .delete()
     .eq('id', paymentId);
-  
+
   if (error) {
     return { data: null, error };
   }
 
   // Phase 4B.3: Rebuild coverage from payment history after delete
-  try {
-    const { rebuildStudentCoverage } = await import('./coverageDatabaseService.js');
-    await rebuildStudentCoverage(payment.student_id);
-  } catch (rebuildErr) {
-    console.error('[Phase4B.3] Coverage rebuild failed after payment delete:', rebuildErr);
-    // Don't fail the delete if coverage rebuild fails - log and continue
-  }
+  // TD-5: surface rebuild failures instead of swallowing them (see updatePayment).
+  const rebuildResult = await rebuildCoverageSafely(payment.student_id, 'delete');
 
-  return { data: true, error: null };
+  return { data: true, error: null, rebuildError: rebuildResult.error };
 }
 
 /**

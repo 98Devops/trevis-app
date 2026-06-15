@@ -194,7 +194,7 @@ function AppInner() {
     if (isConfigured) {
       // Phase 4B.2: Use new coverage-aware payment recording
       const { recordPaymentWithCoverage } = await import('./services/coverageDatabaseService.js');
-      await recordPaymentWithCoverage({
+      const { rebuildError } = await recordPaymentWithCoverage({
         studentId,
         amount: payment.amount,
         paymentDate: payment.date,
@@ -203,14 +203,20 @@ function AppInner() {
         notes: payment.notes,
         recordedBy: user?.id
       });
-      
+
       // Phase 4B.9: Invalidate coverage cache on payment (data changed)
       console.log('[Phase4B.9] Invalidating coverage cache after payment');
       setCoverageCache(new Map());
       setCoverageCacheTimestamp(Date.now());
-      
+
       // No need to recalculate balances - recordPaymentWithCoverage handles everything
       refresh();
+
+      // TD-5: surface coverage rebuild failure instead of reporting a clean success.
+      // The payment row was recorded, but coverage may be stale until repaired.
+      if (rebuildError) {
+        showToast('Payment recorded, but coverage update failed — coverage may be out of date. Try again or run repair.', 'error');
+      }
     }
   };
 
