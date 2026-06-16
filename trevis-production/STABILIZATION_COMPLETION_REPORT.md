@@ -1,0 +1,124 @@
+# TREVIS STABILIZATION — COMPLETION REPORT
+
+**Date:** 2026-06-16
+**Author:** Principal Engineer / System Custodian
+**Branch:** `sprint5-5-ui-work` · **Tag:** `coverage-audit-complete`
+**Status:** Stabilization sprint complete. **Awaiting approval to begin Phase 4C.**
+
+---
+
+## 1. Executive summary
+
+The coverage engine — the financial heart of TREVIS — now has **one authoritative writer, zero
+hidden writers, and zero data drift**. The portfolio's stored coverage matches a from-ledger replay
+exactly for all 134 ACTIVE students. The work that remained at the start of this sprint (retire the
+parallel SQL engines, repair historical drift, prove the repair) is done and verified against
+production. One operator action is outstanding (running the R1 retirement SQL in prod) and is
+documented below; it hardens against future regression and does not affect the now-correct data.
+
+**Recommendation: READY for Phase 4C**, conditional on the single operator step (run R1 in prod).
+
+---
+
+## 2. What was done (this sprint)
+
+### Step 1 — Retire ALL SQL coverage writers ✅
+- Full repo sweep (`COVERAGE_WRITER_INVENTORY.md`) found the original retirement had missed most of
+  the surface: `populate_rent_cycle_fields()` existed in **4 files**, plus a **second independent
+  engine** `calculate_coverage()` with auto-running STEP 6/7 `DO` blocks.
+- `supabase/R1_retire_sql_coverage_rebuild.sql` extended to `RAISE EXCEPTION`-stub **all three**
+  writer families (`populate_rent_cycle_fields` set LAST to win the "last-write-wins" signature
+  race, `rebuild_student_coverage_from_payments`, `calculate_coverage`) and drop the read-side
+  companions (`student_coverage_status` view, `get_dashboard_kpis`, `get_student_status`,
+  `get_days_status`).
+- 4 dormant SQL source files quarantined to `supabase/_archive/` with ⛔ DO-NOT-RUN banners + README.
+- Dead `src/services/_archive/coverageService.legacy.js` deleted (no importers).
+- **Result: exactly one writer (JS `rebuildStudentCoverage`), zero runnable hidden writers in code.**
+
+### Steps 2–4 — Repair & verify portfolio drift ✅
+- **Step 2 (dry-run):** 134 checked, **123 drifted** — investigated and decomposed: 27 real
+  FLOOR→ROUND extensions (the predicted baseline) + 96 stale `next_due_date`/`coverage_start`
+  catch-up with **identical `coverage_end`**. Added a read-only `--verbose` diagnostic and a
+  **coverage_end-EARLIER safety gate** (must be 0). Confirmed **0 reductions**.
+- **Step 3 (apply):** backup `students_coverage_backup_20260616` (170 rows) taken first;
+  `--apply` → **123 written, 0 failed, 0 coverage_end reductions**.
+- **Step 4 (re-audit):** re-run dry-run → **Drifted: 0** (`students_with_drift=0, max_days_lost=0`).
+  Re-running `--apply` writes nothing → **idempotent**.
+
+### Step 5 — Performance audit (findings only) ✅
+- `STAGE9_PERFORMANCE_AUDIT.md`: TD-7 (cache-mitigated N+1 cold fetch), TD-8 (coarse invalidation +
+  unenforced contract), TD-9 read-side (duplicate dashboard query), new PERF-3 (PropertyDetail
+  re-fetches data the dashboard already loaded). **No correctness bugs.** One consolidating fix
+  (app-level coverage store) recommended for Phase 4C. **No code changed.**
+
+---
+
+## 3. Verification evidence
+
+| Check | Result |
+|---|---|
+| R2 dry-run (pre-repair) | Checked 134 / Drifted 123 / EARLIER 0 |
+| Backup before apply | `students_coverage_backup_20260616` = 170 rows, ends 2026-05-30→2026-08-26 |
+| R2 apply | Written 123 / Failed 0 / EARLIER 0 |
+| R2 re-audit (post-repair) | **Drifted 0** / ✅ No drift |
+| R2 idempotency (2nd apply) | Written 0 (no-op) |
+| Test suite | **169 / 169 passing** (vitest, 11 files) |
+| Safety invariant (coverage may only increase) | **Held** — 0 students lost any day |
+
+---
+
+## 4. Reliability score
+
+**Coverage engine reliability: 9 / 10.**
+
+| Dimension | Score | Notes |
+|---|---|---|
+| Correctness (data = ledger) | 10 | drift=0, verified by from-scratch replay |
+| Single source of truth | 9 | one JS writer; SQL stubs live only after operator runs R1 (see §6) |
+| Regression resistance | 8 | RAISE stubs + quarantine + EARLIER gate; full hardening needs R1-in-prod |
+| Test coverage | 9 | 169 tests incl. BC-8 coverage-cache suite; engine math + failure paths covered |
+| Observability | 8 | `--verbose`/EARLIER gate; perf timers; no automated drift alarm yet |
+| Performance | 8 | acceptable at 134 students; consolidating fix deferred to 4C |
+
+Not 10/10 only because (a) the R1 prod run is still operator-pending and (b) there is no *automated*
+recurring drift check — both are §6 follow-ups, not active defects.
+
+---
+
+## 5. Remaining risks
+
+1. **R1 not yet run in prod (operator).** Until executed, the live DB still *contains* the old
+   writer function bodies (dormant — no trigger fires them, app calls none). Risk is human re-run of
+   an archived script. **Mitigation:** run `supabase/R1_retire_sql_coverage_rebuild.sql` (with
+   backup). Low likelihood, fully mitigated by the one action.
+2. **No automated drift monitor.** Drift is caught only by manually running R2. A future regression
+   would be silent until someone looks. **Mitigation (4C):** schedule R2 `--dry-run` as a periodic
+   read-only check / alarm on Drifted>0.
+3. **Cache-invalidation contract is hand-copied (TD-8).** A future mutation path could forget to
+   invalidate → stale UI (DB stays correct). **Mitigation (4C):** centralize in one helper.
+4. **Performance at scale (TD-7/PERF-3).** Fine now; cold-load cost grows with student count.
+   **Mitigation (4C):** app-level coverage store.
+
+None of these is a current correctness defect.
+
+---
+
+## 6. Operator action items (outside code)
+
+- [ ] **Run `supabase/R1_retire_sql_coverage_rebuild.sql` in the Supabase SQL editor** (take a DB
+      backup first). Verify the bottom-of-file SELECTs: all three writers should RAISE; the dropped
+      view/RPCs should resolve to NULL. *This is the last step to make the live DB match the code.*
+- [x] R2 backup taken (`students_coverage_backup_20260616`).
+- [x] R2 `--apply` executed; re-audit drift=0.
+- [ ] (Optional, post-confirmation) drop `students_coverage_backup_20260616` once satisfied.
+
+---
+
+## 7. Recommendation
+
+**READY for Phase 4C**, with one gating condition: **run R1 against production** (§6, item 1). The
+data is correct and proven; the codebase has a single writer; tests are green. Once R1 is executed
+in prod, the live database has exactly one coverage writer and zero runnable hidden writers — the
+stabilization objective fully met end to end.
+
+**Do not begin Phase 4C until this report is approved.**
