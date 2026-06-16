@@ -4,6 +4,7 @@ import { supabase, isConfigured as sbConfigured } from "../lib/supabase";
 import { useAuth } from "./p1_imports_context.jsx";
 import InlineEditField from "../components/InlineEditField.jsx";
 import { getAvailableRooms, getAllAvailableRooms, executeTransfer, getTransferHistory } from "../services/transferService.js";
+import { buildCoverageBreakdown } from "../services/coverageBreakdown.js";
 
 /* ═══════════════════════════════════════════════════════════
    LOGIN SCREEN
@@ -681,6 +682,46 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
             />
           </div>
         )}
+
+        {/* Coverage breakdown — explains how coverage_end / days-remaining was reached.
+            Display-only: replays the ledger through the SAME engine the writer uses. */}
+        {!loadingPayments && paymentHistory.length > 0 && room?.rent > 0 && (() => {
+          const bd = buildCoverageBreakdown(paymentHistory, room.rent);
+          if (!bd.steps.length || !bd.coverageEnd) return null;
+          const today = new Date(); today.setHours(0,0,0,0);
+          const end = new Date(bd.coverageEnd); end.setHours(0,0,0,0);
+          const daysLeft = Math.round((end - today) / (1000*60*60*24));
+          const remainLabel = daysLeft >= 0 ? `${daysLeft} days remaining` : `${Math.abs(daysLeft)} days overdue`;
+          const remainColor = daysLeft > 7 ? T.green : daysLeft >= 0 ? T.gold : T.red;
+          return (
+            <div style={{ marginBottom:20 }}>
+              <div style={{ fontSize:13,fontWeight:700,color:T.text,marginBottom:10 }}>Coverage breakdown</div>
+              <div style={{ background:T.bg,borderRadius:8,padding:"12px 14px" }}>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10 }}>
+                  <div style={{ fontSize:12,color:T.muted }}>
+                    Covered to <span style={{ color:T.text,fontWeight:700 }}>{bd.coverageEndLabel}</span>
+                    <span style={{ color:T.muted }}> · {bd.totalDays} days paid total</span>
+                  </div>
+                  <div style={{ fontSize:12,fontWeight:700,color:remainColor }}>{remainLabel}</div>
+                </div>
+                {bd.steps.map((s, i) => (
+                  <div key={i} style={{ display:"flex",alignItems:"center",gap:8,fontSize:12,padding:"3px 0",color:T.text }}>
+                    <span style={{ color:T.muted,minWidth:96 }}>${s.amount} · {s.dateLabel}</span>
+                    <span style={{ color: s.isEarly ? T.blue : T.text, fontWeight:600 }}>
+                      {s.isEarly ? "+" : ""}{s.days}d
+                    </span>
+                    <span style={{ color:T.muted }}>→ {s.endLabel}</span>
+                    {s.isEarly && (
+                      <span style={{ fontSize:10,color:T.blue,background:"rgba(80,130,255,0.12)",borderRadius:4,padding:"1px 6px" }}>
+                        early · stacked{s.prepaidDaysPreserved ? ` · kept ${s.prepaidDaysPreserved}d` : ""}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Payment timeline */}
         <div style={{ marginBottom:20 }}>
