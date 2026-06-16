@@ -139,15 +139,26 @@ Legend: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low
 - **Fix:** Invalidate per-student (delete the touched id), and centralize mutation+invalidation in
   one helper so it can't be forgotten.
 
-## TD-9 ✅ RESOLVED (R1+R2, write-side) — Coverage source-of-truth split (JS vs SQL)
-> **Resolved 2026-06-16 (write-side).** Stage 8.1 (`DATA_TRUTH_AUDIT.md`) proved the SQL
+## TD-9 ⚠️ PARTIALLY RESOLVED (R1 INCOMPLETE — reopened 2026-06-16) — Coverage source-of-truth split (JS vs SQL)
+> **REOPENED 2026-06-16 by the Coverage Writer Inventory.** R1 retired only **2 of 7** SQL
+> writer definitions. The full sweep (`COVERAGE_WRITER_INVENTORY.md`) found
+> `populate_rent_cycle_fields()` defined in **4 files** (only 1 retired) and an entire
+> **second engine** `calculate_coverage()` + auto-running backfill blocks in
+> `sprint5.5_flexible_rent_cycles*.sql` that R1 never touched. Because all copies share a
+> signature, re-running `FIX_COVERAGE_DAYS_ROUNDING.sql` or `RUN_THIS_COMPLETE.sql` silently
+> re-installs a bad writer over the R1 stub. Completion plan in `SQL_RETIREMENT_MATRIX.md`;
+> drift not yet measured (`COVERAGE_PARITY_AUDIT.md` — needs R2 dry-run vs prod). Mitigating
+> facts: NO trigger auto-fires any of these (human-invocation only), and the live app calls
+> NONE of them (only dead `_archive/coverageService.legacy.js` references the SQL paths).
+>
+> _Prior (over-claimed) note:_ Stage 8.1 (`DATA_TRUTH_AUDIT.md`) proved the SQL
 > `rebuild_student_coverage_from_payments` (FLOOR) and `populate_rent_cycle_fields`
 > (most-recent-only) wrote coverage columns with wrong math, diverging from the JS engine.
-> **R1** retired both SQL functions (loud `RAISE EXCEPTION`; see
-> `supabase/R1_retire_sql_coverage_rebuild.sql`) so `rebuildStudentCoverage()` (JS) is the
-> ONLY writer. **R2** added `scripts/replay_portfolio_coverage.mjs` (dry-run-gated full
-> portfolio replay through the same engine) to correct historical drift. See
-> `R1_R2_COVERAGE_REMEDIATION.md`. Read-side note: the `student_coverage_status` view /
+> **R1** retired those two functions (loud `RAISE EXCEPTION`; see
+> `supabase/R1_retire_sql_coverage_rebuild.sql`). **R2** added
+> `scripts/replay_portfolio_coverage.mjs` (dry-run-gated full portfolio replay through the
+> same engine) to correct historical drift. See `R1_R2_COVERAGE_REMEDIATION.md`. Read-side
+> note: the `student_coverage_status` view /
 > `get_dashboard_kpis` RPC remain (unused by app; app uses JS classifier) — retiring those
 > read-only duplicates is a small remaining follow-up. Original analysis below.
 
