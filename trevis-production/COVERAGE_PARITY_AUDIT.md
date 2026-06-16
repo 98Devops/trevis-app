@@ -5,15 +5,18 @@
 
 ---
 
-## ⚠️ Status of the numbers: NOT YET MEASURABLE FROM THIS ENVIRONMENT
+## ✅ MEASURED FROM PRODUCTION — 2026-06-16 (SQL-editor read-only queries)
 
-The exact drift counts require running R2 against the live database:
+Drift was measured directly against the live database via two read-only SQL queries
+(per-student day-count comparison + portfolio summary). Results below are real, not predicted.
 
-```bash
-SUPABASE_URL=… SUPABASE_SERVICE_KEY=… node scripts/replay_portfolio_coverage.mjs --dry-run
-```
+**Headline: 27 of 134 ACTIVE students drift. Max 3 days. Avg 2.07 days. 100% undercounted (never over).
+Pattern is exclusively the FLOOR rounding bug — no most-recent-only history loss survived (the JS
+rebuild has been overwriting that on payment entry).**
 
-This audit environment has **no production DB credentials**, so I will **not fabricate counts**. Below is (1) the exact methodology, (2) the metrics table to fill from the dry-run, and (3) statically-provable predictions of *which cohorts* will drift and *by how much per payment* — derived from the math divergences proven in `COVERAGE_WRITER_INVENTORY.md`. Whether the answer is "3 students or 40 students" is exactly what the dry-run resolves — and it must be run before Phase 4C.
+> Note on the `57/122 ❌ FAIL` from `PHASE1_VALIDATION_AUDIT.sql`: that counts *per-payment* rows
+> (65 of 122 full-payments wrong). Those 65 bad payment-rows belong to the 27 multi-payment students
+> (each payment loses ~1 day). The per-student figure (**27**) is the operationally meaningful one.
 
 ---
 
@@ -21,22 +24,71 @@ This audit environment has **no production DB credentials**, so I will **not fab
 
 For each ACTIVE student: read full payment ledger (ASC) → replay through `processPayment` (the authoritative engine) → compare engine result vs stored columns → flag `DRIFT` if any of coverage_start/end/daily_rate/next_due_date differ.
 
-## Portfolio drift report — FILL FROM DRY-RUN
+## Portfolio drift report — MEASURED 2026-06-16
 
 | Metric | Value |
 |---|---|
-| ACTIVE students scanned | _____ |
-| Students with drift | _____ |
-| FLOOR drift students (non-even daily rate, e.g. $110→3.67, $260→8.67) | _____ |
-| Historical replay drift students (multi-payment / prepaid carry, most-recent-only victims) | _____ |
-| Max days incorrect | _____ |
-| Average days incorrect | _____ |
-| Total overdue students BEFORE replay | _____ |
-| Total overdue students AFTER replay | _____ |
-| Total expiring students BEFORE replay | _____ |
-| Total expiring students AFTER replay | _____ |
+| ACTIVE students scanned | **134** |
+| Students with drift | **27** |
+| FLOOR drift students (non-even daily rate, e.g. $110→3.67, $260→8.67) | **27 (100% of drift)** |
+| Historical replay drift students (most-recent-only victims) | **0** (already corrected by JS rebuild on payment entry) |
+| Max days incorrect | **3** |
+| Average days incorrect (among drifters) | **2.07** |
+| Direction of error | **100% undercount** (stored ≤ correct, always) |
+| Total overdue students BEFORE | 3 |
+| Total overdue students AFTER replay | **3** (no drifter is overdue — none flips) |
+| Total expiring (EXPIRING_SOON) BEFORE | 10 |
+| Total expiring AFTER replay | **~4** (≈6 boundary students at 6d→8d flip to CURRENT) |
 
-> Capture the dry-run console `DRIFT …` lines into an appendix here as the affected-student list.
+> SQL-editor estimate uses continuous-coverage summation; exact corrected `coverage_end` per student
+> comes from the R2 `--apply` replay through `processPayment`. Drift *set* and *direction* are exact.
+
+### Operationally significant: ~6 boundary students wrongly shown EXPIRING_SOON
+These sit at stored 6 days remaining (EXPIRING_SOON) but are owed +2 days → real 8 days (CURRENT).
+They may receive unnecessary "rent almost due" nudges until corrected:
+
+| Student | Stored days remaining | Owed | Real |
+|---|---|---|---|
+| Thandeka Gumbo | 6 | +2 | 8 (CURRENT) |
+| Maitaishe Manatsa | 6 | +2 | 8 (CURRENT) |
+| Bethel Mudavanhu | 6 | +2 | 8 (CURRENT) |
+| Tinotenda Mambo | 6 | +2 | 8 (CURRENT) |
+| Prisilla Poashayi | 6 | +2 | 8 (CURRENT) |
+| Chengeto Kanyai | 6 | +2 | 8 (CURRENT) |
+
+**No student is wrongly OVERDUE.** The 3 overdue students do not appear in the drift set.
+
+### Full drift list (27 students, measured)
+
+| Student | Rent | Payments | Days lost | Stored coverage_end |
+|---|---|---|---|---|
+| Priscilla Maposa | 110 | 3 | 3 | 2026-07-21 |
+| Nerrisa Zindowe | 110 | 3 | 3 | 2026-07-02 |
+| Ashley Hosvori | 110 | 3 | 3 | 2026-07-21 |
+| Mr Matenhese | 260 | 3 | 3 | 2026-07-21 |
+| Onenhlanha Nyathi | 110 | 5 | 3 | 2026-07-22 |
+| Tashley Kandoto | 110 | 3 | 3 | 2026-07-21 |
+| Thandiwe Sibanda | 110 | 3 | 3 | 2026-07-21 |
+| Tanya Gweru | 110 | 3 | 3 | 2026-07-21 |
+| Alaine Zindere | 110 | 2 | 2 | 2026-06-25 |
+| Thandeka Gumbo | 110 | 2 | 2 | 2026-06-22 |
+| Thandisile Ndebele | 110 | 2 | 2 | 2026-06-26 |
+| Lyne Mudakwenda | 110 | 2 | 2 | 2026-06-27 |
+| Dephen Chakandinakira | 110 | 2 | 2 | 2026-06-27 |
+| Maitaishe Manatsa | 110 | 2 | 2 | 2026-06-22 |
+| Bethel Mudavanhu | 110 | 2 | 2 | 2026-06-22 |
+| Ruvarashe Musungo | 110 | 2 | 2 | 2026-07-13 |
+| Tinotenda Mambo | 110 | 2 | 2 | 2026-06-22 |
+| Prisilla Poashayi | 110 | 2 | 2 | 2026-06-22 |
+| Chengeto Kanyai | 110 | 2 | 2 | 2026-06-22 |
+| Tariro Mufusire | 110 | 2 | 2 | 2026-07-21 |
+| Abel Magari | 260 | 2 | 2 | 2026-07-04 |
+| Courage Ncube | 100 | 3 | 1 | 2026-07-09 |
+| Dennise Kombora | 150 | 2 | 1 | 2026-07-13 |
+| TAPIWA KAUTA | 130 | 2 | 1 | 2026-07-08 |
+| Taedza Chimurendo | 110 | 3 | 1 | 2026-08-26 |
+| TAONGA SHUMBA | 130 | 2 | 1 | 2026-07-06 |
+| Ella Moyo | 130 | 3 | 1 | 2026-07-10 |
 
 ---
 
@@ -71,7 +123,19 @@ Any student whose most recent mutation went through the app (`recordPaymentWithC
 
 ---
 
+## Side-finding: the divergent SQL view is live in production
+The two diagnostic scripts returned **different status counts on the same DB at the same moment**:
+- stored-column basis (`phase4b3` STEP 6): 121 current / 10 expiring / 3 overdue
+- `student_coverage_status` **view** (`VERIFY_SPRINT5.5`): 103 current / 28 expiring / 3 overdue
+
+This confirms the second engine (`calculate_coverage` + the FLOOR view, inventory #8) **exists and is
+queryable in production**. The live app does not read it (only dead `_archive/` code does), so users
+don't see it — but it is a standing trap. Drop it per `SQL_RETIREMENT_MATRIX.md` (low urgency, unused).
+
 ## Bottom line
 - The **engine** is verified correct (MONTH_BOUNDARY_VERIFICATION 17/17; Rutendo reconstruction).
-- The **stored data** parity is **unmeasured until the dry-run runs** — and that run is the gating evidence for Phase 4C readiness.
-- Direction of all error is provably "undercount," so the repair is safe and only ever restores paid-for days.
+- **Stored data parity: MEASURED. 27/134 drift (20%), all FLOOR undercount, 1–3 days.** No money owed
+  to the business; ~6 students currently shown EXPIRING_SOON who have actually paid through.
+- Direction of all error is "undercount," so the repair only restores paid-for days — safe for tenants.
+- **No student is wrongly OVERDUE.** Severity: 🟡 trust/accuracy, not 🔴 financial. The repair (R2
+  `--apply` after backup) corrects all 27 in one pass and is non-destructive.
