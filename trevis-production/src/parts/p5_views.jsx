@@ -324,19 +324,80 @@ function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom, co
 
 /* ═══════════════════════════════════════════════════════════
    STUDENTS GLOBAL LIST
+   TD-4 (Stabilization): filter chips, badges, and counts now derive from the
+   COVERAGE engine (getAllStudentsCoverage → classifyStudent), replacing the legacy
+   PAID/PARTIAL/OVERDUE month-based status from buildProps. The same student who
+   reads "Current" in PropertyDetail now reads "Current" here too — one status system
+   (Rules 1 & 3). Cash figures (Rent/Paid) are kept — they are legitimate.
 ═══════════════════════════════════════════════════════════ */
 export function Students({ props, onAddStudent, onStudentClick }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("ALL");
   const [showVacated, setShowVacated] = useState(false);
+
+  // TD-4: single coverage fetch (one query), refetched on [props] so it stays live
+  // after every payment mutation — same pattern as Dashboard and Finances.
+  const [coverageMap, setCoverageMap] = useState(new Map()); // id → classifyStudent result
+  const [isLoadingCoverage, setIsLoadingCoverage] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchCoverage() {
+      setIsLoadingCoverage(true);
+      const students = await CoverageDB.getAllStudentsCoverage();
+      if (!cancelled) {
+        const m = new Map();
+        for (const s of students) {
+          m.set(s.id, classifyStudent(s));
+        }
+        setCoverageMap(m);
+        setIsLoadingCoverage(false);
+      }
+    }
+    fetchCoverage();
+    return () => { cancelled = true; };
+  }, [props]);
+
+  // helper: resolve the status to display for a student row
+  const getStatus = (s) => {
+    const c = coverageMap.get(s.id);
+    // Non-ACTIVE or not-yet-loaded: fall back to the DB status value (VACANT etc.)
+    if (!c || c.status === 'EXCLUDED') return s.status;
+    return c.status;
+  };
+
   const all = useMemo(() => props.flatMap(p =>
-    p.rooms.flatMap(r => r.students.filter(s=> showVacated ? true : s.status!=="VACANT"&&s.status!=="VACATED").map(s => ({ ...s, property:p.name, room:r.no, rent:r.rent })))
+    p.rooms.flatMap(r =>
+      r.students
+        .filter(s => showVacated ? true : s.status !== "VACANT" && s.status !== "VACATED")
+        .map(s => ({ ...s, property: p.name, room: r.no, rent: r.rent }))
+    )
   ), [props, showVacated]);
-  const filtered = all.filter(s =>
-    (filter==="ALL"||s.status===filter) &&
-    (!search||s.name.toLowerCase().includes(search.toLowerCase())||s.property.toLowerCase().includes(search.toLowerCase()))
-  );
-  const counts = { ALL:all.length, PAID:all.filter(s=>s.status==="PAID").length, PARTIAL:all.filter(s=>s.status==="PARTIAL").length, OVERDUE:all.filter(s=>s.status==="OVERDUE").length };
+
+  // Coverage-status filter chips (TD-4) — replaces PAID/PARTIAL/OVERDUE.
+  const COVERAGE_FILTERS = ["ALL", "CURRENT", "EXPIRING_SOON", "DUE_TODAY", "OVERDUE"];
+  const FILTER_LABELS = { ALL:"All", CURRENT:"Current", EXPIRING_SOON:"Expiring Soon", DUE_TODAY:"Due Today", OVERDUE:"Overdue" };
+  const FILTER_COLORS = { ALL:T.muted, CURRENT:T.green, EXPIRING_SOON:T.amber, DUE_TODAY:"#F97316", OVERDUE:T.red };
+
+  const counts = useMemo(() => {
+    const c = { ALL: 0 };
+    for (const f of COVERAGE_FILTERS.slice(1)) c[f] = 0;
+    for (const s of all) {
+      c.ALL++;
+      const st = getStatus(s);
+      if (c[st] !== undefined) c[st]++;
+    }
+    return c;
+  }, [all, coverageMap]);
+
+  const filtered = useMemo(() => all.filter(s => {
+    const statusMatch = filter === "ALL" || getStatus(s) === filter;
+    const searchMatch = !search ||
+      s.name.toLowerCase().includes(search.toLowerCase()) ||
+      s.property.toLowerCase().includes(search.toLowerCase());
+    return statusMatch && searchMatch;
+  }), [all, filter, search, coverageMap]);
+
   return (
     <div>
       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24 }}>
@@ -358,12 +419,21 @@ export function Students({ props, onAddStudent, onStudentClick }) {
             style={{ width:"100%",background:T.card,border:`1px solid ${T.border}`,borderRadius:9,padding:"9px 12px 9px 34px",
               color:T.text,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:font }} />
         </div>
-        {["ALL","PAID","PARTIAL","OVERDUE"].map(f => (
-          <button key={f} onClick={()=>setFilter(f)} style={{ background:filter===f?T.gold:T.card, border:`1px solid ${filter===f?T.gold:T.border}`,
-            borderRadius:9, padding:"9px 16px", color:filter===f?"#0D0F14":T.muted, fontWeight:filter===f?700:400, fontSize:12, cursor:"pointer", fontFamily:font }}>
-            {f} ({counts[f]||0})
-          </button>
-        ))}
+        {COVERAGE_FILTERS.map(f => {
+          const color = FILTER_COLORS[f];
+          const active = filter === f;
+          return (
+            <button key={f} onClick={() => setFilter(f)}
+              style={{ background: active ? `${color}20` : T.card,
+                border: `1px solid ${active ? color : T.border}`,
+                borderRadius: 9, padding: "9px 16px",
+                color: active ? color : T.muted,
+                fontWeight: active ? 700 : 400, fontSize: 12,
+                cursor: "pointer", fontFamily: font }}>
+              {FILTER_LABELS[f]} ({counts[f] || 0})
+            </button>
+          );
+        })}
       </div>
       <>
       <div className="pn-students-table" style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden" }}>
@@ -379,13 +449,14 @@ export function Students({ props, onAddStudent, onStudentClick }) {
             ) : filtered.map(s => {
               const ac = T.prop[s.property] || { accent: T.gold };
               const isClickable = !isUnassignedRecord(s) && s.status !== "VACANT" && s.status !== "VACATED";
+              const displayStatus = getStatus(s);
               return (
-                <div key={s.id} 
+                <div key={s.id}
                   onClick={() => isClickable && onStudentClick && onStudentClick(s, {no:s.room, rent:s.rent, id:s.room_id}, s.property)}
                   style={{ display:"grid",gridTemplateColumns:"2fr 1.2fr 1fr 1fr 1fr 1fr",padding:"12px 20px",
                   borderBottom:`1px solid ${T.border}15`,alignItems:"center",transition:"background .15s",minWidth:600,
                   cursor: isClickable ? "pointer" : "default" }}
-                  onMouseEnter={e=>{if(isClickable)e.currentTarget.style.background=T.hover}} 
+                  onMouseEnter={e=>{if(isClickable)e.currentTarget.style.background=T.hover}}
                   onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                   <div style={{ fontSize:13,fontWeight:600,color:T.text }}>{getDisplayName(s)}</div>
                   <div style={{ display:"flex",alignItems:"center",gap:6 }}>
@@ -395,7 +466,9 @@ export function Students({ props, onAddStudent, onStudentClick }) {
                   <div style={{ fontSize:12,color:T.muted }}>{s.room}</div>
                   <div style={{ fontSize:12,color:T.subtle,fontFamily:"'IBM Plex Mono',monospace" }}>{fmt(s.rent)}</div>
                   <div style={{ fontSize:12,fontFamily:"'IBM Plex Mono',monospace",color:s.paid>=s.rent?T.green:T.amber }}>{fmt(s.paid)}</div>
-                  <Badge status={s.status} />
+                  {isLoadingCoverage && s.status !== "VACANT" && s.status !== "VACATED"
+                    ? <span style={{ fontSize:11,color:T.muted }}>…</span>
+                    : <Badge status={displayStatus} />}
                 </div>
               );
             })}
@@ -408,16 +481,21 @@ export function Students({ props, onAddStudent, onStudentClick }) {
         ) : filtered.map(s => {
           const ac = T.prop[s.property] || { accent: T.gold };
           const isClickable = !isUnassignedRecord(s) && s.status !== "VACANT" && s.status !== "VACATED";
+          const displayStatus = getStatus(s);
           return (
-            <div key={s.id+"m"} 
-              onClick={()=>isClickable&&onStudentClick&&onStudentClick(s,{no:s.room,rent:s.rent,id:s.room_id},s.property)} 
+            <div key={s.id+"m"}
+              onClick={()=>isClickable&&onStudentClick&&onStudentClick(s,{no:s.room,rent:s.rent,id:s.room_id},s.property)}
               style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:14,borderLeft:`3px solid ${ac.accent}`,cursor:isClickable?"pointer":"default" }}>
               <div style={{ fontSize:14,fontWeight:700,color:T.text,marginBottom:4 }}>{getDisplayName(s)}</div>
               <div style={{ fontSize:12,color:T.subtle,marginBottom:8 }}>{s.property} · {s.room}</div>
               <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr auto",gap:6,alignItems:"center" }}>
                 <div><span style={{color:T.muted,fontSize:11}}>Rent: </span><span style={{color:T.subtle,fontSize:12,fontFamily:"'IBM Plex Mono',monospace"}}>{fmt(s.rent)}</span></div>
                 <div><span style={{color:T.muted,fontSize:11}}>Paid: </span><span style={{color:s.paid>=s.rent?T.green:T.amber,fontSize:12,fontFamily:"'IBM Plex Mono',monospace"}}>{fmt(s.paid)}</span></div>
-                <div style={{justifySelf:"end"}}><Badge status={s.status} /></div>
+                <div style={{justifySelf:"end"}}>
+                  {isLoadingCoverage && s.status !== "VACANT" && s.status !== "VACATED"
+                    ? <span style={{ fontSize:11,color:T.muted }}>…</span>
+                    : <Badge status={displayStatus} />}
+                </div>
               </div>
             </div>
           );

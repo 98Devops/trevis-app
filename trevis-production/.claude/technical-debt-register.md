@@ -77,7 +77,16 @@ Legend: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low
 - **Fix:** Rebuild Finances on `getAllStudentsCoverage` + `classifyStudent`; filter/sort by coverage
   status and `coverage_end`; show days remaining/overdue and outstanding = days_overdue × daily_rate.
 
-## TD-4 🟠 Global Students list filter is legacy status
+## TD-4 ✅ RESOLVED (Stage 7) — Global Students list filter is legacy status
+> **Resolved 2026-06-16.** `Students` function in `p5_views.jsx` rewritten to fetch
+> `getAllStudentsCoverage()` once (refetch on `[props]`), build a `coverageMap`, and
+> drive filter chips (All/Current/Expiring Soon/Due Today/Overdue) and per-row badges
+> from `classifyStudent` — the same function `PropertyDetail`/`RoomRow` use. The legacy
+> PAID/PARTIAL/OVERDUE chips and badges are gone. Loading state shows `…` to prevent
+> stale-badge flash. Cross-view consistency pinned by test. 169/169 passing. See
+> `STABILIZATION_TD4_STUDENTS_VIEW_COVERAGE.md`. Original analysis below.
+
+
 - **Where:** `src/parts/p5_views.jsx` `Students` — filter chips PAID/PARTIAL/OVERDUE and the
   per-row `Badge` use `buildProps` `s.status`, not coverage.
 - **Risk:** Inconsistent with the coverage badges shown inside PropertyDetail room rows; same

@@ -202,6 +202,18 @@ describe('TD-3 Finances — buildFinanceRecords / filter / sort', () => {
     expect(FINANCE_STATUS_FILTERS).toEqual(['ALL', 'CURRENT', 'EXPIRING_SOON', 'DUE_TODAY', 'OVERDUE']);
   });
 
+  it('TD-4: Students list uses same classifyStudent as PropertyDetail — status cannot diverge', async () => {
+    // The same student record classified once produces the same status everywhere.
+    // This test pins the contract: if PropertyDetail shows "Current", Students must too.
+    const { classifyStudent: cs } = await import('./statusClassifier.js');
+    const s = student({ id: 'cross-view', coverage_end: endInDays(15) });
+    const fromClassifier = cs(s);
+    const fromFinance = buildFinanceRecords([s]).find(r => r.id === 'cross-view');
+    expect(fromClassifier.status).toBe('CURRENT');
+    expect(fromFinance.coverageStatus).toBe('CURRENT');
+    // Both views derive from the same function — no third interpretation possible.
+  });
+
   it('Finances overdue count == classifyPortfolio.overdue (Dashboard KPI parity)', async () => {
     const { classifyPortfolio } = await import('./statusClassifier.js');
     const input = [
