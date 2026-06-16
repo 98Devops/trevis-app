@@ -139,14 +139,19 @@ Legend: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low
 - **Fix:** Invalidate per-student (delete the touched id), and centralize mutation+invalidation in
   one helper so it can't be forgotten.
 
-## TD-9 ✅ RESOLVED (write-side complete + data repaired 2026-06-16) — Coverage source-of-truth split (JS vs SQL)
+## TD-9 ✅ FULLY CLOSED (code + data + live DB, R1 verified in prod 2026-06-16) — Coverage source-of-truth split (JS vs SQL)
 > **DATA REPAIRED 2026-06-16 20:02 UTC (R2 `--apply`).** Backup `students_coverage_backup_20260616`
 > (170 rows) taken first. `--apply`: 134 checked, 123 written, **0 failed, 0 coverage_end reductions**
 > (27 real FLOOR→ROUND extensions +1/+2 days; 96 stale next_due_date/coverage_start catch-up with
 > unchanged coverage_end). Re-audit dry-run: **Drifted: 0** — `students_with_drift=0, max_days_lost=0`.
 > Stored coverage now equals the JS engine for every ACTIVE student; R2 is idempotent (re-apply = no-op).
-> See `COVERAGE_PARITY_AUDIT.md` (repaired header). **Still operator-only:** run the extended R1 against
-> prod so the live DB writer definitions become the RAISE stubs (does not affect the now-correct data).
+> See `COVERAGE_PARITY_AUDIT.md` (repaired header).
+>
+> **R1 RUN + VERIFIED IN PROD 2026-06-16.** All three writers (`rebuild_student_coverage_from_payments`,
+> `calculate_coverage`, `populate_rent_cycle_fields`) now RAISE `USING RETIRED COVERAGE ENGINE`; the
+> read-side companions (`student_coverage_status` view, `get_dashboard_kpis`, `get_student_status`,
+> `get_days_status`) all resolve to NULL. **Live DB matches code: one writer, zero runnable hidden
+> writers. TD-9 fully closed (code + data + live DB).**
 >
 
 > **RETIREMENT COMPLETED 2026-06-16 (extended R1).** The full sweep

@@ -2,8 +2,8 @@
 
 **Date:** 2026-06-16
 **Author:** Principal Engineer / System Custodian
-**Branch:** `sprint5-5-ui-work` · **Tag:** `coverage-audit-complete`
-**Status:** Stabilization sprint complete. **Awaiting approval to begin Phase 4C.**
+**Branch:** `main` (merged + pushed) · **Tag:** `coverage-audit-complete`
+**Status:** Stabilization sprint complete — **code AND live DB aligned (R1 verified in prod 2026-06-16).** **Awaiting approval to begin Phase 4C.**
 
 ---
 
@@ -69,19 +69,20 @@ documented below; it hardens against future regression and does not affect the n
 
 ## 4. Reliability score
 
-**Coverage engine reliability: 9 / 10.**
+**Coverage engine reliability: 9.5 / 10.**
 
 | Dimension | Score | Notes |
 |---|---|---|
 | Correctness (data = ledger) | 10 | drift=0, verified by from-scratch replay |
-| Single source of truth | 9 | one JS writer; SQL stubs live only after operator runs R1 (see §6) |
-| Regression resistance | 8 | RAISE stubs + quarantine + EARLIER gate; full hardening needs R1-in-prod |
+| Single source of truth | 10 | one JS writer; **R1 verified in prod** — all SQL writers RAISE, companions dropped |
+| Regression resistance | 9 | RAISE stubs live in prod + quarantine + EARLIER gate; only gap is no auto-monitor |
 | Test coverage | 9 | 169 tests incl. BC-8 coverage-cache suite; engine math + failure paths covered |
 | Observability | 8 | `--verbose`/EARLIER gate; perf timers; no automated drift alarm yet |
 | Performance | 8 | acceptable at 134 students; consolidating fix deferred to 4C |
 
-Not 10/10 only because (a) the R1 prod run is still operator-pending and (b) there is no *automated*
-recurring drift check — both are §6 follow-ups, not active defects.
+Not a perfect 10 only because there is no *automated* recurring drift check and the perf
+consolidation is deferred — both are Phase-4C enhancements, not active defects. The original
+gating gap (R1 not run in prod) is now closed and verified.
 
 ---
 
@@ -105,9 +106,10 @@ None of these is a current correctness defect.
 
 ## 6. Operator action items (outside code)
 
-- [ ] **Run `supabase/R1_retire_sql_coverage_rebuild.sql` in the Supabase SQL editor** (take a DB
-      backup first). Verify the bottom-of-file SELECTs: all three writers should RAISE; the dropped
-      view/RPCs should resolve to NULL. *This is the last step to make the live DB match the code.*
+- [x] **R1 run + VERIFIED in prod (2026-06-16).** `rebuild_student_coverage_from_payments`,
+      `calculate_coverage`, `populate_rent_cycle_fields` all RAISE `USING RETIRED COVERAGE ENGINE`;
+      `student_coverage_status` / `get_dashboard_kpis` / `get_student_status` / `get_days_status`
+      all resolve to NULL. **Live DB now matches code: one writer, zero runnable hidden writers.**
 - [x] R2 backup taken (`students_coverage_backup_20260616`).
 - [x] R2 `--apply` executed; re-audit drift=0.
 - [ ] (Optional, post-confirmation) drop `students_coverage_backup_20260616` once satisfied.
@@ -116,9 +118,9 @@ None of these is a current correctness defect.
 
 ## 7. Recommendation
 
-**READY for Phase 4C**, with one gating condition: **run R1 against production** (§6, item 1). The
-data is correct and proven; the codebase has a single writer; tests are green. Once R1 is executed
-in prod, the live database has exactly one coverage writer and zero runnable hidden writers — the
-stabilization objective fully met end to end.
+**READY for Phase 4C.** The gating condition (run R1 against production) is now **complete and
+verified** — see §6. Data is correct and proven (drift=0); the codebase and the live database both
+have exactly one coverage writer and zero runnable hidden writers; tests are green (169/169). The
+stabilization objective is **fully met end to end (code + live DB).**
 
 **Do not begin Phase 4C until this report is approved.**
