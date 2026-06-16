@@ -16,7 +16,16 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { buildAttentionList, countAttentionByProperty, ATTENTION_STATUSES } from './dashboardAttention.js';
+import {
+  buildAttentionList,
+  countAttentionByProperty,
+  ATTENTION_STATUSES,
+  buildFinanceRecords,
+  filterFinanceRecords,
+  sortByCoverageEnd,
+  coverageOutstanding,
+  FINANCE_STATUS_FILTERS,
+} from './dashboardAttention.js';
 
 // classifyStudent compares coverage_end against "today", so we pin the clock.
 const TODAY = new Date('2026-06-15T12:00:00Z');
@@ -124,5 +133,87 @@ describe('dashboardAttention.countAttentionByProperty', () => {
 
   it('ATTENTION_STATUSES is the agreed vocabulary (guards against drift)', () => {
     expect(ATTENTION_STATUSES).toEqual(['OVERDUE', 'DUE_TODAY', 'EXPIRING_SOON']);
+  });
+});
+
+describe('TD-3 Finances — buildFinanceRecords / filter / sort', () => {
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(TODAY); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('INCLUDES CURRENT students (Finances shows everyone, unlike Attention)', () => {
+    const records = buildFinanceRecords([
+      student({ id: 'current', coverage_end: endInDays(40) }),
+      student({ id: 'overdue', coverage_end: endInDays(-2) }),
+    ]);
+    expect(records.map(r => r.id).sort()).toEqual(['current', 'overdue']);
+    const byId = Object.fromEntries(records.map(r => [r.id, r.coverageStatus]));
+    expect(byId.current).toBe('CURRENT');
+    expect(byId.overdue).toBe('OVERDUE');
+  });
+
+  it('EXCLUDES non-ACTIVE students from Finances', () => {
+    const records = buildFinanceRecords([
+      student({ id: 'vacated', status: 'VACATED', coverage_end: endInDays(10) }),
+      student({ id: 'checked-out', status: 'CHECKED_OUT', coverage_end: endInDays(-1) }),
+      student({ id: 'active', coverage_end: endInDays(10) }),
+    ]);
+    expect(records.map(r => r.id)).toEqual(['active']);
+  });
+
+  it('outstanding parity with the Attention table (same formula, same numbers)', () => {
+    const input = [student({ id: 'o', coverage_end: endInDays(-6), daily_rate: 5 })];
+    const fin = buildFinanceRecords(input).find(r => r.id === 'o');
+    const att = buildAttentionList(input).find(r => r.id === 'o');
+    expect(fin.outstanding).toBe(30); // 6 × $5
+    expect(fin.outstanding).toBe(att.outstanding); // never diverges
+  });
+
+  it('coverageOutstanding is 0 when not overdue', () => {
+    expect(coverageOutstanding({ daysOverdue: 0 }, 5)).toBe(0);
+    expect(coverageOutstanding({ daysOverdue: null }, 5)).toBe(0);
+    expect(coverageOutstanding({ daysOverdue: 3 }, 5)).toBe(15);
+  });
+
+  it('filterFinanceRecords filters by coverage status; ALL returns everything', () => {
+    const records = buildFinanceRecords([
+      student({ id: 'a', coverage_end: endInDays(40) }),  // CURRENT
+      student({ id: 'b', coverage_end: endInDays(3) }),   // EXPIRING_SOON
+      student({ id: 'c', coverage_end: endInDays(-1) }),  // OVERDUE
+      student({ id: 'd', coverage_end: endInDays(0) }),   // DUE_TODAY
+    ]);
+    expect(filterFinanceRecords(records, 'ALL')).toHaveLength(4);
+    expect(filterFinanceRecords(records, 'CURRENT').map(r => r.id)).toEqual(['a']);
+    expect(filterFinanceRecords(records, 'EXPIRING_SOON').map(r => r.id)).toEqual(['b']);
+    expect(filterFinanceRecords(records, 'OVERDUE').map(r => r.id)).toEqual(['c']);
+    expect(filterFinanceRecords(records, 'DUE_TODAY').map(r => r.id)).toEqual(['d']);
+  });
+
+  it('sortByCoverageEnd: soonest-to-expire first, null (no payment) most urgent', () => {
+    const records = buildFinanceRecords([
+      student({ id: 'far', coverage_end: endInDays(40) }),
+      student({ id: 'soon', coverage_end: endInDays(2) }),
+      student({ id: 'expired', coverage_end: endInDays(-5) }),
+      student({ id: 'none', coverage_end: null }),
+    ]);
+    expect(sortByCoverageEnd(records).map(r => r.id)).toEqual(['none', 'expired', 'soon', 'far']);
+  });
+
+  it('FINANCE_STATUS_FILTERS is the agreed vocabulary (guards against drift)', () => {
+    expect(FINANCE_STATUS_FILTERS).toEqual(['ALL', 'CURRENT', 'EXPIRING_SOON', 'DUE_TODAY', 'OVERDUE']);
+  });
+
+  it('Finances overdue count == classifyPortfolio.overdue (Dashboard KPI parity)', async () => {
+    const { classifyPortfolio } = await import('./statusClassifier.js');
+    const input = [
+      student({ id: 'a', coverage_end: endInDays(40) }),  // CURRENT
+      student({ id: 'b', coverage_end: endInDays(3) }),   // EXPIRING_SOON
+      student({ id: 'c', coverage_end: endInDays(-1) }),  // OVERDUE
+      student({ id: 'd', coverage_end: endInDays(0) }),   // DUE_TODAY (counted as overdue)
+      student({ id: 'e', status: 'VACATED', coverage_end: endInDays(-9) }), // excluded
+    ];
+    const records = buildFinanceRecords(input);
+    const financesInArrears = records.filter(r => ['OVERDUE', 'DUE_TODAY'].includes(r.coverageStatus)).length;
+    const dashboardOverdue = classifyPortfolio(input).overdue;
+    expect(financesInArrears).toBe(dashboardOverdue); // same money truth on both pages
   });
 });

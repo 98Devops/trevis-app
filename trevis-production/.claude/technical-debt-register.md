@@ -57,7 +57,17 @@ Legend: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low
   classification (reuse `classifyPortfolio` / the per-student coverage already fetched). Keep
   cash figures (collected/expected) clearly labelled as monthly, separate from status.
 
-## TD-3 🔴 Finances/Arrears page never migrated to coverage
+## TD-3 ✅ RESOLVED (Stage 6) — Finances/Arrears page never migrated to coverage
+> **Resolved 2026-06-16.** `p7_arrears.jsx` rewritten on `getAllStudentsCoverage` +
+> `classifyStudent`: coverage-status filter chips (All/Current/Expiring Soon/Due
+> Today/Overdue) replace aging buckets; sorts by `coverage_end` asc; Outstanding =
+> days_overdue × daily_rate via the SHARED `coverageOutstanding()` helper (same formula
+> as the Dashboard Attention table & getDashboardKPIs). Cash figures kept but relabelled
+> monthly. Consistency locked by tests: outstanding parity with Attention, and overdue
+> count parity with `classifyPortfolio` (the Dashboard KPI). +8 tests; 168/168 passing.
+> See `STABILIZATION_TD3_FINANCES_COVERAGE_MIGRATION.md`. Original analysis below.
+
+
 - **Where:** `src/parts/p7_arrears.jsx` — **zero** coverage imports.
 - **What:** Buckets by *days since last payment* (0–30/31–60/60+) and derives status from
   `balance = rent − paid`. Sprint 5.5 explicitly planned coverage-status filters (Current /
