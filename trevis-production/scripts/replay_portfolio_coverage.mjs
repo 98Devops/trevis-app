@@ -1,0 +1,122 @@
+#!/usr/bin/env node
+/**
+ * R2 — FULL PORTFOLIO COVERAGE REPLAY
+ *
+ *   ACTIVE students → read payment ledger → replay through the JS engine
+ *   (processPayment, the SAME function rebuildStudentCoverage uses) → rewrite
+ *   coverage fields. Fixes historical drift left by the retired SQL engines
+ *   (FLOOR / most-recent-only). Non-destructive: coverage is fully derived from
+ *   the immutable payment ledger.
+ *
+ * USAGE:
+ *   node scripts/replay_portfolio_coverage.mjs --dry-run   # report drift, write NOTHING (default)
+ *   node scripts/replay_portfolio_coverage.mjs --apply     # rewrite coverage columns
+ *
+ * ENV (required): SUPABASE_URL, SUPABASE_SERVICE_KEY (or VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)
+ *
+ * SAFETY:
+ *   • Defaults to --dry-run. --apply must be explicit.
+ *   • Reuses the authoritative pure engine — no new/duplicate math (Rule 1, Rule 2).
+ *   • Only writes the 4 derived coverage columns; never touches payments.
+ *   • Take a DB backup first (DATABASE_CLEANSING_PLAN.md §0).
+ */
+
+import { createClient } from '@supabase/supabase-js';
+import { processPayment } from '../src/services/paymentProcessor.js';
+
+const APPLY = process.argv.includes('--apply');
+const MODE = APPLY ? 'APPLY (writing)' : 'DRY-RUN (no writes)';
+
+const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const key = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+if (!url || !key) {
+  console.error('ERROR: set SUPABASE_URL and SUPABASE_SERVICE_KEY (or VITE_ equivalents) in the environment.');
+  process.exit(1);
+}
+const supabase = createClient(url, key);
+
+const fmt = (d) => (d ? new Date(d).toISOString().split('T')[0] : null);
+
+/** Replay one student's ledger through the engine. Returns the final coverage state. */
+function replayLedger(payments, monthlyRent, status) {
+  let coverageEnd = null;
+  let final = null;
+  for (const p of payments) {
+    final = processPayment(
+      { amount: parseFloat(p.amount), payment_date: p.payment_date },
+      { coverage_end: coverageEnd, monthly_rent: monthlyRent, status }
+    );
+    coverageEnd = final.coverageEnd;
+  }
+  if (!final) return { coverage_start: null, coverage_end: null, daily_rate: null, next_due_date: null };
+  return {
+    coverage_start: fmt(final.coverageStart),
+    coverage_end: fmt(final.coverageEnd),
+    daily_rate: final.dailyRate,
+    next_due_date: fmt(final.nextDueDate),
+  };
+}
+
+async function main() {
+  console.log(`\n=== R2 PORTFOLIO REPLAY — ${MODE} — ${new Date().toISOString()} ===\n`);
+
+  const { data: students, error } = await supabase
+    .from('students')
+    .select('id, full_name, status, coverage_start, coverage_end, daily_rate, next_due_date, rooms(rent_per_bed)')
+    .eq('status', 'ACTIVE')
+    .order('full_name', { ascending: true });
+
+  if (error) { console.error('Failed to fetch students:', error.message); process.exit(1); }
+
+  let checked = 0, drifted = 0, written = 0, skipped = 0, failed = 0;
+  const driftRows = [];
+
+  for (const s of students) {
+    checked++;
+    const rent = s.rooms?.rent_per_bed;
+    if (!rent) { skipped++; console.warn(`SKIP  ${s.full_name}: no room rent (orphaned — see DATABASE_CLEANSING_PLAN §7)`); continue; }
+
+    const { data: payments, error: pErr } = await supabase
+      .from('payments')
+      .select('amount, payment_date')
+      .eq('student_id', s.id)
+      .order('payment_date', { ascending: true });
+    if (pErr) { failed++; console.error(`FAIL  ${s.full_name}: ${pErr.message}`); continue; }
+
+    let expected;
+    try { expected = replayLedger(payments || [], rent, s.status); }
+    catch (e) { failed++; console.error(`FAIL  ${s.full_name}: ${e.message}`); continue; }
+
+    const stored = {
+      coverage_start: s.coverage_start, coverage_end: s.coverage_end,
+      daily_rate: s.daily_rate == null ? null : Number(s.daily_rate),
+      next_due_date: s.next_due_date,
+    };
+    const isDrift =
+      stored.coverage_start !== expected.coverage_start ||
+      stored.coverage_end   !== expected.coverage_end   ||
+      stored.next_due_date  !== expected.next_due_date  ||
+      (stored.daily_rate ?? null) !== (expected.daily_rate ?? null);
+
+    if (isDrift) {
+      drifted++;
+      driftRows.push({ name: s.full_name, stored: stored.coverage_end, expected: expected.coverage_end });
+      console.log(`DRIFT ${s.full_name}: stored end=${stored.coverage_end} -> correct end=${expected.coverage_end}` +
+                  (stored.daily_rate !== expected.daily_rate ? ` | rate ${stored.daily_rate}->${expected.daily_rate}` : ''));
+
+      if (APPLY) {
+        const { error: uErr } = await supabase.from('students').update(expected).eq('id', s.id);
+        if (uErr) { failed++; console.error(`  WRITE FAIL ${s.full_name}: ${uErr.message}`); }
+        else { written++; }
+      }
+    }
+  }
+
+  console.log(`\n=== SUMMARY (${MODE}) ===`);
+  console.log(`Checked: ${checked} | Drifted: ${drifted} | ${APPLY ? 'Written' : 'Would write'}: ${APPLY ? written : drifted} | Skipped(no room): ${skipped} | Failed: ${failed}`);
+  if (!APPLY && drifted > 0) console.log(`\nRe-run with --apply to correct the ${drifted} drifted student(s). Back up first.`);
+  if (drifted === 0) console.log(`\n✅ All ACTIVE students already match the JS engine. No drift.`);
+  process.exit(failed > 0 ? 2 : 0);
+}
+
+main().catch((e) => { console.error('FATAL:', e); process.exit(1); });

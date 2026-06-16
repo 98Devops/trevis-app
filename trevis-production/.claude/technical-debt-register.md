@@ -139,7 +139,19 @@ Legend: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low
 - **Fix:** Invalidate per-student (delete the touched id), and centralize mutation+invalidation in
   one helper so it can't be forgotten.
 
-## TD-9 🟡 KPI source inconsistency (JS classify vs SQL RPC)
+## TD-9 ✅ RESOLVED (R1+R2, write-side) — Coverage source-of-truth split (JS vs SQL)
+> **Resolved 2026-06-16 (write-side).** Stage 8.1 (`DATA_TRUTH_AUDIT.md`) proved the SQL
+> `rebuild_student_coverage_from_payments` (FLOOR) and `populate_rent_cycle_fields`
+> (most-recent-only) wrote coverage columns with wrong math, diverging from the JS engine.
+> **R1** retired both SQL functions (loud `RAISE EXCEPTION`; see
+> `supabase/R1_retire_sql_coverage_rebuild.sql`) so `rebuildStudentCoverage()` (JS) is the
+> ONLY writer. **R2** added `scripts/replay_portfolio_coverage.mjs` (dry-run-gated full
+> portfolio replay through the same engine) to correct historical drift. See
+> `R1_R2_COVERAGE_REMEDIATION.md`. Read-side note: the `student_coverage_status` view /
+> `get_dashboard_kpis` RPC remain (unused by app; app uses JS classifier) — retiring those
+> read-only duplicates is a small remaining follow-up. Original analysis below.
+
+
 - **Where:** `coverageDatabaseService.getDashboardKPIs` classifies in JS; the SQL
   `get_dashboard_kpis` RPC and `student_coverage_status` view also exist (used only by orphaned
   `coverageService`). Two coverage-status implementations (JS + SQL) can drift.

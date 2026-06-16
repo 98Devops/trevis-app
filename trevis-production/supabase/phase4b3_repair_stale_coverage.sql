@@ -1,5 +1,13 @@
--- PHASE 4B.3 - REPAIR STALE COVERAGE DATA
--- 
+-- ⚠️ RETIRED (R1) 2026-06-16 — DO NOT RUN THE FUNCTION BELOW.
+-- rebuild_student_coverage_from_payments() uses FLOOR(amount/daily_rate) and loses
+-- 1 day per payment for non-even daily rates ($110, $260, ...). It has been disabled
+-- by supabase/R1_retire_sql_coverage_rebuild.sql. Coverage is written ONLY by the JS
+-- engine rebuildStudentCoverage(); historical drift is corrected by the JS portfolio
+-- replay (R2 — scripts/replay_portfolio_coverage.mjs). See DATA_TRUTH_AUDIT.md.
+-- The STEP 1 diagnostic SELECT below is still useful (read-only).
+--
+-- PHASE 4B.3 - REPAIR STALE COVERAGE DATA (HISTORICAL — superseded)
+--
 -- This script repairs students whose coverage was corrupted by the old payment flow
 -- (before Phase 4B.3 fix was implemented).
 --

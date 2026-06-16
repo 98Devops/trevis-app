@@ -231,6 +231,10 @@ FROM payments;
 -- 
 -- ═══════════════════════════════════════════════════════════
 
+-- ⚠️ RETIRED (R1) 2026-06-16 — DO NOT RUN. populate_rent_cycle_fields() uses the
+-- MOST-RECENT payment only and drops payment history / prepaid carry-over (e.g. Rutendo
+-- 28d vs correct 37d). Disabled by supabase/R1_retire_sql_coverage_rebuild.sql. Use the
+-- JS portfolio replay (R2 — scripts/replay_portfolio_coverage.mjs). See DATA_TRUTH_AUDIT.md.
 CREATE OR REPLACE FUNCTION populate_rent_cycle_fields()
 RETURNS TABLE (
   students_processed integer,
