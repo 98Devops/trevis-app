@@ -25,6 +25,7 @@ import { createClient } from '@supabase/supabase-js';
 import { processPayment } from '../src/services/paymentProcessor.js';
 
 const APPLY = process.argv.includes('--apply');
+const VERBOSE = process.argv.includes('--verbose');
 const MODE = APPLY ? 'APPLY (writing)' : 'DRY-RUN (no writes)';
 
 const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -100,9 +101,29 @@ async function main() {
 
     if (isDrift) {
       drifted++;
-      driftRows.push({ name: s.full_name, stored: stored.coverage_end, expected: expected.coverage_end });
-      console.log(`DRIFT ${s.full_name}: stored end=${stored.coverage_end} -> correct end=${expected.coverage_end}` +
-                  (stored.daily_rate !== expected.daily_rate ? ` | rate ${stored.daily_rate}->${expected.daily_rate}` : ''));
+      driftRows.push({ name: s.full_name, stored: stored.coverage_end, expected: expected.coverage_end,
+        endEarlier: !!(stored.coverage_end && expected.coverage_end && expected.coverage_end < stored.coverage_end),
+        endLater:   !!(stored.coverage_end && expected.coverage_end && expected.coverage_end > stored.coverage_end),
+        endOnly:    stored.coverage_end === expected.coverage_end });
+      if (VERBOSE) {
+        // Read-only diagnostic: show EVERY field that differs, and whether
+        // coverage_end moves earlier (UNSAFE) / later (safe) / equal.
+        const diffs = [];
+        if (stored.coverage_start !== expected.coverage_start) diffs.push(`start ${stored.coverage_start}->${expected.coverage_start}`);
+        if (stored.coverage_end   !== expected.coverage_end)   diffs.push(`end ${stored.coverage_end}->${expected.coverage_end}`);
+        if (stored.next_due_date  !== expected.next_due_date)  diffs.push(`next_due ${stored.next_due_date}->${expected.next_due_date}`);
+        if ((stored.daily_rate ?? null) !== (expected.daily_rate ?? null)) diffs.push(`rate ${stored.daily_rate}->${expected.daily_rate}`);
+        let dir = 'end=';
+        if (stored.coverage_end && expected.coverage_end) {
+          dir = expected.coverage_end < stored.coverage_end ? '⚠️EARLIER'
+              : expected.coverage_end > stored.coverage_end ? 'later'
+              : 'end-equal';
+        }
+        console.log(`DRIFT ${s.full_name} [${dir}]: ${diffs.join(' | ')}`);
+      } else {
+        console.log(`DRIFT ${s.full_name}: stored end=${stored.coverage_end} -> correct end=${expected.coverage_end}` +
+                    (stored.daily_rate !== expected.daily_rate ? ` | rate ${stored.daily_rate}->${expected.daily_rate}` : ''));
+      }
 
       if (APPLY) {
         const { error: uErr } = await supabase.from('students').update(expected).eq('id', s.id);
@@ -112,8 +133,14 @@ async function main() {
     }
   }
 
+  const endEarlier = driftRows.filter(r => r.endEarlier).length;
+  const endLater   = driftRows.filter(r => r.endLater).length;
+  const endEqual   = driftRows.filter(r => r.endOnly).length;
+
   console.log(`\n=== SUMMARY (${MODE}) ===`);
   console.log(`Checked: ${checked} | Drifted: ${drifted} | ${APPLY ? 'Written' : 'Would write'}: ${APPLY ? written : drifted} | Skipped(no room): ${skipped} | Failed: ${failed}`);
+  console.log(`coverage_end direction → later: ${endLater} | equal (other-field drift): ${endEqual} | ⚠️ EARLIER: ${endEarlier}`);
+  if (endEarlier > 0) console.log(`\n🛑 STOP: ${endEarlier} student(s) would have coverage_end moved EARLIER. This violates the safety invariant. Do NOT --apply until investigated.`);
   if (!APPLY && drifted > 0) console.log(`\nRe-run with --apply to correct the ${drifted} drifted student(s). Back up first.`);
   if (drifted === 0) console.log(`\n✅ All ACTIVE students already match the JS engine. No drift.`);
   process.exit(failed > 0 ? 2 : 0);
