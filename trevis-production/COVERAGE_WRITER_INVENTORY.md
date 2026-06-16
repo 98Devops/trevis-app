@@ -67,6 +67,23 @@ Grep of `src/` for all SQL coverage function names → **only hits are in `src/s
 ## E. Verdict
 
 - **Authoritative writer:** exactly one — JS `rebuildStudentCoverage()` (#1), with #2/#3 delegating to its math.
-- **Hidden/latent writers remaining:** **5 SQL paths** (#5, #6, #8, #9, and #4 until its source is neutralized) can still overwrite coverage with FLOOR or most-recent-only math if a human runs them.
-- **Auto-writers (triggers):** none. Risk is human-invocation only.
-- **Objective "exactly one writer, zero hidden writers":** **NOT YET met.** R1 covered 2 of 7 SQL writer definitions. See `SQL_RETIREMENT_MATRIX.md` for the completion plan.
+- **Auto-writers (triggers):** none. Risk was human-invocation only.
+
+### Update 2026-06-16 — retirement executed (code complete)
+The completion plan in `SQL_RETIREMENT_MATRIX.md` has been carried out in the repo:
+- R1 (`R1_retire_sql_coverage_rebuild.sql`) now RAISE-stubs **all three** writer
+  families — `populate_rent_cycle_fields` (#4/#5/#6 signature, set LAST),
+  `rebuild_student_coverage_from_payments` (#7), and `calculate_coverage` (#8/#9) —
+  and drops the read-side companions (`student_coverage_status` view,
+  `get_dashboard_kpis`, `get_student_status`, `get_days_status`).
+- Source files #5, #6, #8, #9 (`FIX_COVERAGE_DAYS_ROUNDING.sql`,
+  `RUN_THIS_COMPLETE.sql`, both `flexible_rent_cycles*.sql`) moved to
+  `supabase/_archive/` with ⛔ guard banners + README, so the "last write wins"
+  footgun can't be innocently re-triggered.
+- Dead `_archive/coverageService.legacy.js` (only reader of the dropped view/RPCs)
+  deleted.
+
+- **Objective "exactly one writer, zero hidden writers":** **MET in code.** The only
+  remaining action is OPERATOR-ONLY — run the updated R1 against production (with
+  backup) so the live DB definitions become the RAISE stubs. After that, the live DB
+  has exactly one coverage writer (JS) and zero runnable hidden writers.

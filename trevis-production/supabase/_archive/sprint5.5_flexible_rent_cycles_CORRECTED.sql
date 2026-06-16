@@ -1,5 +1,9 @@
+-- ⛔ RETIRED / QUARANTINED 2026-06-16 — DO NOT RUN. See supabase/_archive/README.md.
+-- Defines a SECOND coverage engine (calculate_coverage, FLOOR) whose STEP 6/7 DO blocks
+-- AUTO-EXECUTE and overwrite student coverage. The only writer is JS
+-- rebuildStudentCoverage(); bulk re-derive via scripts/replay_portfolio_coverage.mjs.
 -- ═══════════════════════════════════════════════════════════
--- SPRINT 5.5: FLEXIBLE RENT CYCLE ENGINE
+-- SPRINT 5.5: FLEXIBLE RENT CYCLE ENGINE - CORRECTED
 -- Fundamental billing model redesign from calendar month to coverage periods
 -- ═══════════════════════════════════════════════════════════
 
@@ -39,8 +43,8 @@ BEGIN
   -- Coverage starts on payment date
   coverage_start := p_payment_date;
   
-  -- Coverage ends after days_covered days
-  coverage_end := p_payment_date + (days_covered || ' days')::interval - '1 day'::interval;
+  -- Coverage ends after days_covered days (inclusive, so subtract 1)
+  coverage_end := p_payment_date + (days_covered - 1 || ' days')::interval;
   
   RETURN NEXT;
 END;
@@ -112,30 +116,30 @@ $$ LANGUAGE plpgsql STABLE;
 DO $$
 DECLARE
   v_payment RECORD;
-  v_room RECORD;
+  v_room_rent numeric;
   v_coverage RECORD;
 BEGIN
   -- Loop through all payments that don't have coverage dates
   FOR v_payment IN 
-    SELECT p.id, p.student_id, p.amount, p.payment_date, p.payment_method
+    SELECT p.id, p.student_id, p.amount, p.payment_date
     FROM payments p
     WHERE p.coverage_start_date IS NULL
     ORDER BY p.payment_date ASC
   LOOP
     -- Get room rent for this student
-    SELECT r.rent_per_bed INTO v_room
+    SELECT r.rent_per_bed INTO v_room_rent
     FROM students s
     JOIN rooms r ON s.room_id = r.id
     WHERE s.id = v_payment.student_id;
     
-    -- Skip if no room found
-    IF v_room.rent_per_bed IS NULL THEN
+    -- Skip if no room found or rent is null
+    IF v_room_rent IS NULL OR v_room_rent = 0 THEN
       CONTINUE;
     END IF;
     
     -- Calculate coverage for this payment
     SELECT * INTO v_coverage
-    FROM calculate_coverage(v_room.rent_per_bed, v_payment.amount, v_payment.payment_date);
+    FROM calculate_coverage(v_room_rent, v_payment.amount, v_payment.payment_date);
     
     -- Update payment with coverage data
     UPDATE payments
@@ -145,6 +149,8 @@ BEGIN
       days_covered = v_coverage.days_covered
     WHERE id = v_payment.id;
   END LOOP;
+  
+  RAISE NOTICE 'Payment backfill complete';
 END $$;
 
 -- STEP 7: Update students table with current coverage
@@ -153,37 +159,43 @@ DO $$
 DECLARE
   v_student RECORD;
   v_latest_payment RECORD;
-  v_room RECORD;
+  v_room_rent numeric;
+  v_count integer := 0;
 BEGIN
   -- Loop through all active students
   FOR v_student IN 
     SELECT s.id, s.room_id, s.status
     FROM students s
-    WHERE s.status NOT IN ('VACATED', 'SUSPENDED')
+    WHERE s.status IN ('PAID', 'PARTIAL', 'OVERDUE', 'ACTIVE')
   LOOP
     -- Get latest payment for this student
-    SELECT p.*
+    SELECT p.coverage_start_date, p.coverage_end_date
     INTO v_latest_payment
     FROM payments p
     WHERE p.student_id = v_student.id
+      AND p.coverage_start_date IS NOT NULL
     ORDER BY p.payment_date DESC, p.created_at DESC
     LIMIT 1;
     
     -- Get room rent
-    SELECT r.rent_per_bed INTO v_room
+    SELECT r.rent_per_bed INTO v_room_rent
     FROM rooms r
     WHERE r.id = v_student.room_id;
     
     -- Update student with coverage data
-    IF v_latest_payment.id IS NOT NULL AND v_room.rent_per_bed IS NOT NULL THEN
+    IF v_latest_payment.coverage_start_date IS NOT NULL AND v_room_rent IS NOT NULL THEN
       UPDATE students
       SET 
         coverage_start = v_latest_payment.coverage_start_date,
         coverage_end = v_latest_payment.coverage_end_date,
-        daily_rate = ROUND(v_room.rent_per_bed / 30.0, 2)
+        daily_rate = ROUND(v_room_rent / 30.0, 2)
       WHERE id = v_student.id;
+      
+      v_count := v_count + 1;
     END IF;
   END LOOP;
+  
+  RAISE NOTICE 'Student coverage update complete: % students updated', v_count;
 END $$;
 
 -- STEP 8: Create view for operational dashboard
@@ -214,7 +226,7 @@ SELECT
 FROM students s
 JOIN rooms r ON s.room_id = r.id
 JOIN properties p ON r.property_id = p.id
-WHERE s.status NOT IN ('VACATED', 'SUSPENDED');
+WHERE s.status IN ('PAID', 'PARTIAL', 'OVERDUE', 'ACTIVE');
 
 -- STEP 9: Create function to get dashboard KPIs
 CREATE OR REPLACE FUNCTION get_dashboard_kpis()
@@ -254,3 +266,30 @@ COMMENT ON FUNCTION get_dashboard_kpis IS 'Returns dashboard KPIs based on cover
 -- ═══════════════════════════════════════════════════════════
 -- MIGRATION COMPLETE
 -- ═══════════════════════════════════════════════════════════
+
+-- TESTING QUERIES (Run these after migration to verify)
+/*
+-- 1. Check if columns were added
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'payments' 
+  AND column_name IN ('coverage_start_date', 'coverage_end_date', 'days_covered');
+
+-- 2. Check backfilled payments
+SELECT id, student_id, amount, payment_date, 
+       coverage_start_date, coverage_end_date, days_covered
+FROM payments 
+LIMIT 10;
+
+-- 3. Check students with coverage
+SELECT id, full_name, coverage_start, coverage_end, daily_rate
+FROM students
+WHERE coverage_end IS NOT NULL
+LIMIT 10;
+
+-- 4. Check coverage status view
+SELECT * FROM student_coverage_status LIMIT 10;
+
+-- 5. Check dashboard KPIs
+SELECT * FROM get_dashboard_kpis();
+*/

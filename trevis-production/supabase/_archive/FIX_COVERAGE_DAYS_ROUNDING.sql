@@ -1,3 +1,7 @@
+-- ⛔ RETIRED / QUARANTINED 2026-06-16 — DO NOT RUN. See supabase/_archive/README.md.
+-- Defines a LATENT coverage writer (populate_rent_cycle_fields, most-recent-only math)
+-- that would corrupt correct JS-computed coverage. The only writer is JS
+-- rebuildStudentCoverage(); bulk re-derive via scripts/replay_portfolio_coverage.mjs.
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- FIX: COVERAGE DAYS ROUNDING ISSUE
 -- ═══════════════════════════════════════════════════════════════════════════════

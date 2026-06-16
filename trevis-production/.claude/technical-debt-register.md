@@ -139,17 +139,25 @@ Legend: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low
 - **Fix:** Invalidate per-student (delete the touched id), and centralize mutation+invalidation in
   one helper so it can't be forgotten.
 
-## TD-9 ⚠️ PARTIALLY RESOLVED (R1 INCOMPLETE — reopened 2026-06-16) — Coverage source-of-truth split (JS vs SQL)
-> **REOPENED 2026-06-16 by the Coverage Writer Inventory.** R1 retired only **2 of 7** SQL
-> writer definitions. The full sweep (`COVERAGE_WRITER_INVENTORY.md`) found
-> `populate_rent_cycle_fields()` defined in **4 files** (only 1 retired) and an entire
-> **second engine** `calculate_coverage()` + auto-running backfill blocks in
-> `sprint5.5_flexible_rent_cycles*.sql` that R1 never touched. Because all copies share a
-> signature, re-running `FIX_COVERAGE_DAYS_ROUNDING.sql` or `RUN_THIS_COMPLETE.sql` silently
-> re-installs a bad writer over the R1 stub. Completion plan in `SQL_RETIREMENT_MATRIX.md`;
-> drift not yet measured (`COVERAGE_PARITY_AUDIT.md` — needs R2 dry-run vs prod). Mitigating
-> facts: NO trigger auto-fires any of these (human-invocation only), and the live app calls
-> NONE of them (only dead `_archive/coverageService.legacy.js` references the SQL paths).
+## TD-9 ✅ RESOLVED (write-side, code-complete 2026-06-16 — operator-run + R2 pending) — Coverage source-of-truth split (JS vs SQL)
+> **RETIREMENT COMPLETED 2026-06-16 (extended R1).** The full sweep
+> (`COVERAGE_WRITER_INVENTORY.md`) found `populate_rent_cycle_fields()` in **4 files** and a
+> **second engine** `calculate_coverage()` + auto-running backfill blocks that the original R1
+> never touched. R1 (`supabase/R1_retire_sql_coverage_rebuild.sql`) was **extended to retire
+> all three writer families** — `populate_rent_cycle_fields` (set LAST in run order to win the
+> "last write wins" signature race), `rebuild_student_coverage_from_payments`, and
+> `calculate_coverage` — each now `RAISE EXCEPTION 'USING RETIRED COVERAGE ENGINE...'`, and the
+> read-side companions (`student_coverage_status` view, `get_dashboard_kpis`,
+> `get_student_status`, `get_days_status`) are dropped. The 4 dormant source files were moved to
+> `supabase/_archive/` with ⛔ DO-NOT-RUN banners + README, and dead
+> `_archive/coverageService.legacy.js` was deleted. **One writer (JS rebuildStudentCoverage),
+> zero runnable hidden writers.**
+>
+> **Remaining (not code):** (a) OPERATOR runs the updated R1 against prod (with backup) so the
+> live DB definitions become the stubs; (b) R2 `--dry-run` then `--apply` corrects the measured
+> historical drift (27/134 students, 1–3 days, all undercount — `COVERAGE_PARITY_AUDIT.md`).
+> Mitigating facts that bounded the risk all along: NO trigger auto-fires any writer
+> (human-invocation only), and the live app called NONE of them.
 >
 > _Prior (over-claimed) note:_ Stage 8.1 (`DATA_TRUTH_AUDIT.md`) proved the SQL
 > `rebuild_student_coverage_from_payments` (FLOOR) and `populate_rent_cycle_fields`

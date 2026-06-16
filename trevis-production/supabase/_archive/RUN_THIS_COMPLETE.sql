@@ -1,3 +1,7 @@
+-- ⛔ RETIRED / QUARANTINED 2026-06-16 — DO NOT RUN (despite the filename). See
+-- supabase/_archive/README.md. AUTO-EXECUTES populate_rent_cycle_fields() (most-recent-
+-- only math) and would corrupt correct JS-computed coverage. The only writer is JS
+-- rebuildStudentCoverage(); bulk re-derive via scripts/replay_portfolio_coverage.mjs.
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- SPRINT 5.5: COMPLETE MIGRATION - RUN THIS IN SUPABASE SQL EDITOR
 -- ═══════════════════════════════════════════════════════════════════════════════

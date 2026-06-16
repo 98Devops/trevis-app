@@ -47,10 +47,10 @@
 
 ## Completion criteria for "one writer, zero hidden writers"
 
-1. ☐ Extend & run R1 so the **live DB definition** of `populate_rent_cycle_fields`, `rebuild_student_coverage_from_payments`, and `calculate_coverage` all `RAISE EXCEPTION`.
-2. ☐ Physically archive `FIX_COVERAGE_DAYS_ROUNDING.sql`, `RUN_THIS_COMPLETE.sql`, both `flexible_rent_cycles*.sql` → `supabase/_archive/` so they can't be innocently re-run.
-3. ☐ Optionally drop the unused `student_coverage_status` view + KPI/status RPCs.
-4. ☐ Delete dead `_archive/coverageService.legacy.js`.
-5. ☐ Re-run the writer grep → only JS `rebuildStudentCoverage()` remains as a live writer.
+1. ☑ **DONE (code).** Extended R1 so it `RAISE EXCEPTION`-stubs `populate_rent_cycle_fields` (last in run order), `rebuild_student_coverage_from_payments`, AND `calculate_coverage`, plus drops the read-side companions. **Operator must run the updated `R1_retire_sql_coverage_rebuild.sql` against prod** for the live DB definitions to become the stubs. Verification SELECTs are at the bottom of the script.
+2. ☑ **DONE.** Archived `FIX_COVERAGE_DAYS_ROUNDING.sql`, `RUN_THIS_COMPLETE.sql`, both `flexible_rent_cycles*.sql` → `supabase/_archive/` (via `git mv`), each with a ⛔ DO-NOT-RUN guard banner + `supabase/_archive/README.md`.
+3. ☑ **DONE (in R1).** R1 now `DROP`s the unused `student_coverage_status` view + `get_dashboard_kpis` / `get_student_status` / `get_days_status` RPCs (no longer "optional" — folded into the one retirement script).
+4. ☑ **DONE.** Deleted dead `src/services/_archive/coverageService.legacy.js` (`git rm`; verified no importers).
+5. ☑ **DONE (code).** Writer grep over `src/` → only JS `rebuildStudentCoverage()` remains. SQL writers exist only as RAISE stubs (live after operator runs R1) + quarantined archive copies.
 
-**All of the above are operator/code-change steps — none executed in this read-only audit.**
+**Code/repo steps are complete. The one remaining step is OPERATOR-ONLY: run the updated R1 against production (with backup) so the live DB function definitions become the RAISE stubs.** No production DB write was performed here.
