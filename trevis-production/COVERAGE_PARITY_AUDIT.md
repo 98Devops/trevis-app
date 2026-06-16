@@ -5,6 +5,20 @@
 
 ---
 
+## ✅✅ REPAIRED — 2026-06-16 20:02 UTC (R2 `--apply` executed against production)
+
+The drift measured below has been corrected. Sequence:
+1. **Backup taken** — `students_coverage_backup_20260616` (170 rows, coverage_end 2026-05-30→2026-08-26) before any write.
+2. **R2 `--apply`** — `Checked: 134 | Drifted: 123 | Written: 123 | Failed: 0 | ⚠️ EARLIER: 0`.
+   - 27 students: real FLOOR→ROUND extension (coverage_end moved **+1/+2 days later**) — the baseline below.
+   - 96 students: stale `next_due_date`/`coverage_start` catch-up only; `coverage_end` **unchanged** (no day gained or lost).
+   - **0 students** had coverage_end moved earlier — safety invariant held across the whole portfolio.
+3. **Re-audit (dry-run)** — `Checked: 134 | Drifted: 0 | ✅ No drift`. Re-running `--apply` writes nothing (idempotent).
+
+**Post-repair state: `students_with_drift = 0`, `max_days_lost = 0`.** Stored coverage now equals the authoritative JS engine for every ACTIVE student. The figures below are the pre-repair baseline, retained for the record.
+
+---
+
 ## ✅ MEASURED FROM PRODUCTION — 2026-06-16 (SQL-editor read-only queries)
 
 Drift was measured directly against the live database via two read-only SQL queries

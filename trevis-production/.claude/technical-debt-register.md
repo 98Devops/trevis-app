@@ -139,7 +139,16 @@ Legend: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low
 - **Fix:** Invalidate per-student (delete the touched id), and centralize mutation+invalidation in
   one helper so it can't be forgotten.
 
-## TD-9 ✅ RESOLVED (write-side, code-complete 2026-06-16 — operator-run + R2 pending) — Coverage source-of-truth split (JS vs SQL)
+## TD-9 ✅ RESOLVED (write-side complete + data repaired 2026-06-16) — Coverage source-of-truth split (JS vs SQL)
+> **DATA REPAIRED 2026-06-16 20:02 UTC (R2 `--apply`).** Backup `students_coverage_backup_20260616`
+> (170 rows) taken first. `--apply`: 134 checked, 123 written, **0 failed, 0 coverage_end reductions**
+> (27 real FLOOR→ROUND extensions +1/+2 days; 96 stale next_due_date/coverage_start catch-up with
+> unchanged coverage_end). Re-audit dry-run: **Drifted: 0** — `students_with_drift=0, max_days_lost=0`.
+> Stored coverage now equals the JS engine for every ACTIVE student; R2 is idempotent (re-apply = no-op).
+> See `COVERAGE_PARITY_AUDIT.md` (repaired header). **Still operator-only:** run the extended R1 against
+> prod so the live DB writer definitions become the RAISE stubs (does not affect the now-correct data).
+>
+
 > **RETIREMENT COMPLETED 2026-06-16 (extended R1).** The full sweep
 > (`COVERAGE_WRITER_INVENTORY.md`) found `populate_rent_cycle_fields()` in **4 files** and a
 > **second engine** `calculate_coverage()` + auto-running backfill blocks that the original R1
