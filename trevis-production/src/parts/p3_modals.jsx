@@ -687,38 +687,66 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
             Display-only: replays the ledger through the SAME engine the writer uses. */}
         {!loadingPayments && paymentHistory.length > 0 && room?.rent > 0 && (() => {
           const bd = buildCoverageBreakdown(paymentHistory, room.rent);
-          if (!bd.steps.length || !bd.coverageEnd) return null;
+          if (!bd.chains.length || !bd.coverageEnd) return null;
           const today = new Date(); today.setHours(0,0,0,0);
           const end = new Date(bd.coverageEnd); end.setHours(0,0,0,0);
           const daysLeft = Math.round((end - today) / (1000*60*60*24));
           const remainLabel = daysLeft >= 0 ? `${daysLeft} days remaining` : `${Math.abs(daysLeft)} days overdue`;
           const remainColor = daysLeft > 7 ? T.green : daysLeft >= 0 ? T.gold : T.red;
+          // Render each coverage CHAIN as its own block. Previous (expired)
+          // chains are dimmed + [lapsed]; the current chain is highlighted.
+          // This answers "why is a 2025 payment affecting today?" → it's a
+          // separate, expired chain, not part of the current coverage.
+          const stepRow = (s, i, dim) => (
+            <div key={i} style={{ display:"flex",alignItems:"center",gap:8,fontSize:12,padding:"3px 0",color: dim ? T.muted : T.text }}>
+              <span style={{ color:T.muted,minWidth:96 }}>${s.amount} · {s.dateLabel}</span>
+              <span style={{ color: dim ? T.muted : (s.isEarly ? T.blue : T.text), fontWeight:600 }}>
+                {s.isEarly ? "+" : ""}{s.days}d
+              </span>
+              <span style={{ color:T.muted }}>→ {s.endLabel}</span>
+              {s.isEarly && !dim && (
+                <span style={{ fontSize:10,color:T.blue,background:"rgba(80,130,255,0.12)",borderRadius:4,padding:"1px 6px" }}>
+                  early · stacked{s.prepaidDaysPreserved ? ` · kept ${s.prepaidDaysPreserved}d` : ""}
+                </span>
+              )}
+            </div>
+          );
           return (
             <div style={{ marginBottom:20 }}>
               <div style={{ fontSize:13,fontWeight:700,color:T.text,marginBottom:10 }}>Coverage breakdown</div>
-              <div style={{ background:T.bg,borderRadius:8,padding:"12px 14px" }}>
-                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10 }}>
-                  <div style={{ fontSize:12,color:T.muted }}>
-                    Covered to <span style={{ color:T.text,fontWeight:700 }}>{bd.coverageEndLabel}</span>
-                    <span style={{ color:T.muted }}> · {bd.totalDays} days paid total</span>
-                  </div>
-                  <div style={{ fontSize:12,fontWeight:700,color:remainColor }}>{remainLabel}</div>
-                </div>
-                {bd.steps.map((s, i) => (
-                  <div key={i} style={{ display:"flex",alignItems:"center",gap:8,fontSize:12,padding:"3px 0",color:T.text }}>
-                    <span style={{ color:T.muted,minWidth:96 }}>${s.amount} · {s.dateLabel}</span>
-                    <span style={{ color: s.isEarly ? T.blue : T.text, fontWeight:600 }}>
-                      {s.isEarly ? "+" : ""}{s.days}d
+
+              {/* Previous (expired) chains — dimmed */}
+              {bd.chains.filter(c => !c.isCurrent).map((c, ci) => (
+                <div key={`prev-${ci}`} style={{ background:T.bg,borderRadius:8,padding:"10px 14px",marginBottom:8,opacity:0.7 }}>
+                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:6 }}>
+                    <div style={{ fontSize:11,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:600 }}>
+                      Previous coverage (expired)
+                    </div>
+                    <span style={{ fontSize:10,color:T.muted,background:"rgba(120,120,120,0.15)",borderRadius:4,padding:"1px 6px" }}>
+                      lapsed · {c.startLabel} → {c.endLabel}
                     </span>
-                    <span style={{ color:T.muted }}>→ {s.endLabel}</span>
-                    {s.isEarly && (
-                      <span style={{ fontSize:10,color:T.blue,background:"rgba(80,130,255,0.12)",borderRadius:4,padding:"1px 6px" }}>
-                        early · stacked{s.prepaidDaysPreserved ? ` · kept ${s.prepaidDaysPreserved}d` : ""}
-                      </span>
-                    )}
                   </div>
-                ))}
-              </div>
+                  {c.steps.map((s, i) => stepRow(s, i, true))}
+                </div>
+              ))}
+
+              {/* Current chain — highlighted */}
+              {bd.chains.filter(c => c.isCurrent).map((c, ci) => (
+                <div key={`cur-${ci}`} style={{ background:T.bg,borderRadius:8,padding:"12px 14px",border:`1px solid ${remainColor}33` }}>
+                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8 }}>
+                    <div style={{ fontSize:11,color:ac.accent,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700 }}>
+                      Current coverage chain
+                    </div>
+                    <div style={{ fontSize:12,fontWeight:700,color:remainColor }}>{remainLabel}</div>
+                  </div>
+                  {c.steps.map((s, i) => stepRow(s, i, false))}
+                  <div style={{ borderTop:`1px solid ${T.border}`,marginTop:8,paddingTop:8,fontSize:12,color:T.muted }}>
+                    Covered <span style={{ color:T.text,fontWeight:600 }}>{c.startLabel} → {c.endLabel}</span>
+                    <span> · {c.days} days in this chain</span>
+                    {bd.chains.length > 1 && <span> · {bd.totalDays} days paid all-time</span>}
+                  </div>
+                </div>
+              ))}
             </div>
           );
         })()}

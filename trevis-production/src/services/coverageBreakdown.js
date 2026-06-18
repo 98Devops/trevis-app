@@ -128,8 +128,28 @@ export function buildCoverageBreakdown(payments, monthlyRent) {
     };
   });
 
+  // Group steps into coverage CHAINS. A new chain starts on the first step and
+  // on every non-early payment (a normal payment after coverage had lapsed = a
+  // gap). The LAST chain is the current one; earlier chains are expired.
+  const chains = [];
+  steps.forEach((step) => {
+    if (chains.length === 0 || !step.isEarly) {
+      chains.push({ steps: [], start: step.start, end: step.end, days: 0 });
+    }
+    const c = chains[chains.length - 1];
+    c.steps.push(step);
+    c.end = step.end;        // chain end = last step's end
+    c.days += step.days;
+  });
+  chains.forEach((c, i) => {
+    c.startLabel = label(c.start);
+    c.endLabel = label(c.end);
+    c.isCurrent = i === chains.length - 1;
+  });
+
   return {
     steps,
+    chains,
     totalDays,
     coverageEnd: coverageEnd ? toISO(coverageEnd) : null,
     coverageEndLabel: coverageEnd ? label(coverageEnd) : null,

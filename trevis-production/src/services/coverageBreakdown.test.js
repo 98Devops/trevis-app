@@ -135,6 +135,38 @@ describe('buildCoverageBreakdown', () => {
     expect(r.firstStart).toBe('2026-05-25'); // unbroken chain keeps original start
   });
 
+  it('groups steps into chains: gap splits into previous + current', () => {
+    const r = buildCoverageBreakdown(
+      [
+        { amount: 110, payment_date: '2026-01-01' }, // chain 1
+        { amount: 110, payment_date: '2026-06-01' }, // gap -> chain 2 (current)
+      ],
+      110
+    );
+    expect(r.chains).toHaveLength(2);
+    expect(r.chains[0].isCurrent).toBe(false);
+    expect(r.chains[0].start).toBe('2026-01-01');
+    expect(r.chains[1].isCurrent).toBe(true);
+    expect(r.chains[1].start).toBe('2026-06-01');
+    expect(r.chains[1].end).toBe('2026-06-30');
+  });
+
+  it('continuous (early/stacked) payments stay ONE current chain', () => {
+    const r = buildCoverageBreakdown(
+      [
+        { amount: 110, payment_date: '2026-05-25' },
+        { amount: 114, payment_date: '2026-06-02' }, // early -> same chain
+      ],
+      110
+    );
+    expect(r.chains).toHaveLength(1);
+    expect(r.chains[0].isCurrent).toBe(true);
+    expect(r.chains[0].steps).toHaveLength(2);
+    expect(r.chains[0].start).toBe('2026-05-25');
+    expect(r.chains[0].end).toBe('2026-07-24');
+    expect(r.chains[0].days).toBe(61);
+  });
+
   it('includes the year in labels when the ledger spans multiple years', () => {
     // Real Onenhlanha-style: payments in 2025 AND 2026 -> labels must show year.
     const r = buildCoverageBreakdown(
