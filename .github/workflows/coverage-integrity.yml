@@ -37,11 +37,12 @@ jobs:
         with:
           node-version: '22'
 
-      # Prefer the reproducible `npm ci`; fall back to `npm install` if the lock
-      # file ever desyncs (e.g. platform-specific WASM deps) so a lock hiccup can
-      # never silently disable the coverage-integrity monitor.
-      - name: Install deps
-        run: npm ci || npm install
+      # The monitor script only needs the Supabase client at runtime. Installing
+      # just that avoids `npm ci` lock-file strictness on platform-specific WASM
+      # build deps (@emnapi/@rolldown) that differ between Windows (local) and the
+      # Linux runner — those are build-time deps the report never uses. Fast + robust.
+      - name: Install Supabase client
+        run: npm install --no-save @supabase/supabase-js
 
       - name: Run coverage integrity report (read-only)
         env:
