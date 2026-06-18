@@ -1,15 +1,33 @@
 /**
  * Coverage Database Service - Sprint 5.5 Phase 3
- * 
+ *
  * This is the ONLY service that talks to Supabase for coverage operations.
  * All other services are pure functions.
- * 
+ *
+ * ┌───────────────────────────────────────────────────────────────────────────┐
+ * │ DERIVED-CACHE CONTRACT (Phase 4C-A #4 — read before editing coverage code) │
+ * │                                                                            │
+ * │ TRUTH lives in: payments.{amount, payment_date} + rooms.rent_per_bed +     │
+ * │   students.{room_id, status}.                                              │
+ * │                                                                            │
+ * │ students.{coverage_start, coverage_end, daily_rate, next_due_date} are     │
+ * │   DERIVED CACHE — a pure function of the ledger via rebuildStudentCoverage()│
+ * │   (the SOLE writer). Never hand-author these fields anywhere else.         │
+ * │                                                                            │
+ * │ Therefore EVERY mutation of a truth input MUST trigger a rebuild:          │
+ * │   payment create/update/delete, room rent edit, transfer, room/status      │
+ * │   change, vacate. See COVERAGE_MUTATION_MATRIX.md (all paths CLOSED).      │
+ * │                                                                            │
+ * │ Backstops: DB CHECK coverage_start <= coverage_end (R3); nightly drift     │
+ * │   monitor (replay_portfolio_coverage.mjs --report); R2 as auditor.         │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ *
  * RESPONSIBILITIES:
  * - Record payments with coverage calculation
  * - Fetch dashboard KPIs with status classification
  * - Retrieve student coverage data
  * - Calculate overdue amounts
- * 
+ *
  * @module coverageDatabaseService
  */
 

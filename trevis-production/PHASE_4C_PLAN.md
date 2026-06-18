@@ -17,7 +17,12 @@
    (checked/drifted/corrupt-ranges/reductions, `STATUS: HEALTHY`), read-only, non-zero exit on any
    problem. Scheduled nightly via `.github/workflows/coverage-integrity.yml` (02:00 UTC +
    manual dispatch). **Operator: add repo secrets `SUPABASE_URL` + `SUPABASE_SERVICE_KEY`.**
-4. **Coverage invariants** — `CHECK (coverage_start <= coverage_end)` + derived-cache docs. _(next)_
+4. ✅ **Coverage invariants (DONE 2026-06-18)** — `supabase/R3_coverage_invariants.sql` adds
+   `CHECK (coverage_start <= coverage_end)` (with read-only pre-flight; start==end is valid).
+   Derived-cache contract documented at the top of `coverageDatabaseService.js`.
+   **Operator: run R3 in Supabase SQL editor** (pre-flight must be 0 first; it is, post-repair).
+
+**→ Phase 4C-A (Integrity) COMPLETE** once the operator runs R3 + adds the Action secrets.
 
 **Phase 4C-B — Trust & Explainability**
 5. **Chain-aware timeline** (current chain vs previous expired chains).
