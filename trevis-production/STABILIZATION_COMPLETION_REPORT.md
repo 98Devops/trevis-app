@@ -20,12 +20,14 @@
 
 The coverage engine — the financial heart of TREVIS — now has **one authoritative writer, zero
 hidden writers, and zero data drift**. The portfolio's stored coverage matches a from-ledger replay
-exactly for all 134 ACTIVE students. The work that remained at the start of this sprint (retire the
+exactly for all ACTIVE students. The work that remained at the start of this sprint (retire the
 parallel SQL engines, repair historical drift, prove the repair) is done and verified against
-production. One operator action is outstanding (running the R1 retirement SQL in prod) and is
-documented below; it hardens against future regression and does not affect the now-correct data.
+production. The R1 retirement SQL has been **run and verified in prod** (§6); a follow-on
+`coverage_start` storage bug found in team review was also fixed and repaired (see the 2026-06-18
+addendum above). No operator action remains.
 
-**Recommendation: READY for Phase 4C**, conditional on the single operator step (run R1 in prod).
+**Recommendation: READY for Phase 4C** (unconditional — R1 verified in prod, data drift = 0). The
+Phase 4C plan is captured in `PHASE_4C_PLAN.md`.
 
 ---
 
