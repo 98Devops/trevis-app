@@ -139,7 +139,22 @@ Legend: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low
 - **Fix:** Invalidate per-student (delete the touched id), and centralize mutation+invalidation in
   one helper so it can't be forgotten.
 
-## TD-9 ✅ FULLY CLOSED (code + data + live DB, R1 verified in prod 2026-06-16) — Coverage source-of-truth split (JS vs SQL)
+## TD-9 ✅ FULLY CLOSED (code + data + live DB) — Coverage source-of-truth split (JS vs SQL)
+> **coverage_start BUG FOUND + FIXED + REPAIRED 2026-06-18.** A raw-table query (team review)
+> surfaced Onenhlanha Nyathi with `coverage_start == coverage_end == 2026-07-24` (a 1-day window
+> that can't hold "91 days paid"). Root cause: `rebuildStudentCoverage()` and R2 stored the LAST
+> payment's *slice* start as the student's `coverage_start`; for a long-term tenant whose final
+> payment is a small early/stacked slice, that collapses to start==end. `coverage_end`,
+> days-remaining, and the ledger were always correct (and no UI reads `coverage_start`), so it was a
+> storage/presentation bug, not an accounting bug. FIX: store the start of the CURRENT CONTINUOUS
+> chain (resets after a coverage gap via `processPayment.isEarlyPayment`), applied in lockstep to
+> `rebuildStudentCoverage`, R2 `replayLedger`, and `coverageBreakdown`. REPAIR: R2 `--apply` rewrote
+> **54** students' `coverage_start` (backup `students_coverage_backup_20260618`; **0 coverage_end
+> moved**, 0 failed). Post-repair audit `coverage_start >= coverage_end` = **0**; dry-run **Drifted:
+> 0**. Onenhlanha now `2026-05-25 → 2026-07-24` (gap-aware: his 2025 coverage had lapsed). Tests
+> 179/179. Also exposed silent re-drift (payments edited after the first R2) → reinforces the need
+> for the Phase-4C standing drift monitor. See `supabase/AUDIT_coverage_start_bug.sql`.
+>
 > **DATA REPAIRED 2026-06-16 20:02 UTC (R2 `--apply`).** Backup `students_coverage_backup_20260616`
 > (170 rows) taken first. `--apply`: 134 checked, 123 written, **0 failed, 0 coverage_end reductions**
 > (27 real FLOOR→ROUND extensions +1/+2 days; 96 stale next_due_date/coverage_start catch-up with

@@ -5,6 +5,15 @@
 **Branch:** `main` (merged + pushed) · **Tag:** `coverage-audit-complete`
 **Status:** Stabilization sprint complete — **code AND live DB aligned (R1 verified in prod 2026-06-16).** **Awaiting approval to begin Phase 4C.**
 
+> **Addendum 2026-06-18 — coverage_start bug found & repaired.** Post-deploy team review found a
+> `coverage_start` storage bug (last-payment slice start stored instead of the current-chain start;
+> Onenhlanha showed start==end). Fixed with a gap-aware "current continuous chain" rule across all
+> three replay sites; R2 `--apply` repaired 54 students (0 coverage_end moved, 0 failed). Post-repair
+> audit = 0 corrupt rows, dry-run Drifted = 0. `coverage_end`/days-remaining/ledger were never wrong
+> (storage bug, not accounting). Tests 179/179. This validated the report's Risk #2 (silent re-drift,
+> as payments were edited after the first R2) — the Phase-4C standing drift monitor is now a firm
+> recommendation, not optional. See TD-9 and `supabase/AUDIT_coverage_start_bug.sql`.
+
 ---
 
 ## 1. Executive summary
