@@ -19,12 +19,12 @@ rent), `students.status` (ACTIVE gating), `rooms.rent_per_bed` (→ daily_rate).
 | 2 | Payment update (amount/date/method) | `paymentService.updatePayment` → `rebuildCoverageSafely` (1 retry, surfaces error) | 1 student | ✅ yes | OK |
 | 3 | Payment delete | `paymentService.deletePayment` → `rebuildCoverageSafely` | 1 student | ✅ yes | OK |
 | 4 | Inline payment field edit | `paymentService` (students update at L166) / `p3_modals` handlers | 1 student | ✅ yes (handlers invalidate cache + updatePayment rebuilds) | OK |
-| 5 | **Room rent edit (`rent_per_bed`)** | `propertyService.updateRoom` | **ALL ACTIVE students in the room** | ❌ **NO** | 🔴 **GAP — highest risk** |
-| 6 | **Student transfer (room change)** | `transferService.executeTransfer` → RPC `execute_student_transfer` | 1 student (new rent) | ❌ **NO JS rebuild after RPC** | 🔴 **GAP** |
-| 7 | **Student update (room_id / status)** | `studentService.updateStudent` | 1 student | ❌ **NO** | 🔴 **GAP** (room_id or status change → stale coverage) |
-| 8 | **Student remove → VACATED** | `studentService.removeStudent` | 1 student | ❌ NO | 🟡 GAP (coverage should null/stop; classifier excludes non-ACTIVE, but stored fields linger) |
+| 5 | **Room rent edit (`rent_per_bed`)** | `propertyService.updateRoom` → `rebuildRoomCoverage` | **ALL ACTIVE students in the room** | ✅ **YES (fixed 2026-06-18)** | ✅ CLOSED — fans out to all ACTIVE occupants only when rent actually changes |
+| 6 | **Student transfer (room change)** | `transferService.executeTransfer` → RPC + `rebuildStudentCoverage` | 1 student (new rent) | ✅ **YES (fixed)** | ✅ CLOSED — rebuild after RPC; returns `rebuildError` |
+| 7 | **Student update (room_id / status)** | `studentService.updateStudent` | 1 student | ✅ **YES (fixed)** | ✅ CLOSED — rebuilds when `room_id` or `status` present |
+| 8 | **Student remove → VACATED** | `studentService.removeStudent` | 1 student | ✅ **YES (fixed)** | ✅ CLOSED — nulls derived coverage (replay is ACTIVE-only) |
 | 9 | Student add | `studentService.addStudent` | 1 student | n/a (no payments yet) | OK (nothing to rebuild) |
-| 10 | Room delete / remove | `propertyService.deleteRoom` / `removeRoom` | students in room | ❌ NO | 🟡 GAP (orphaned students — also DATABASE_CLEANSING §7) |
+| 10 | Room delete / remove | `propertyService.deleteRoom` / `removeRoom` | students in room | ❌ NO | 🟡 GAP (orphaned students — DATABASE_CLEANSING §7; deferred, separate concern) |
 
 ---
 

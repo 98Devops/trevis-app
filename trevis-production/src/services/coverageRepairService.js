@@ -103,8 +103,48 @@ export async function repairAllStudentsCoverage() {
 }
 
 /**
+ * Rebuild coverage for ALL ACTIVE students in a room (Phase 4C-A #5).
+ *
+ * Used when a room's rent_per_bed changes — that alters daily_rate (and therefore
+ * day counts) for every ACTIVE occupant, so each must be replayed. The single
+ * highest-blast-radius mutation in COVERAGE_MUTATION_MATRIX.md.
+ *
+ * @param {string} roomId
+ * @returns {Promise<{success: boolean, rebuilt: number, failed: number, errors: Array<string>}>}
+ */
+export async function rebuildRoomCoverage(roomId) {
+  if (!roomId) return { success: false, rebuilt: 0, failed: 0, errors: ['No roomId'] };
+
+  const { data: students, error } = await supabase
+    .from('students')
+    .select('id, full_name')
+    .eq('room_id', roomId)
+    .eq('status', 'ACTIVE');
+
+  if (error) {
+    return { success: false, rebuilt: 0, failed: 0, errors: [error.message] };
+  }
+  if (!students || students.length === 0) {
+    return { success: true, rebuilt: 0, failed: 0, errors: [] };
+  }
+
+  let rebuilt = 0, failed = 0;
+  const errors = [];
+  for (const s of students) {
+    try {
+      await rebuildStudentCoverage(s.id);
+      rebuilt++;
+    } catch (e) {
+      failed++;
+      errors.push(`${s.full_name}: ${e.message}`);
+    }
+  }
+  return { success: failed === 0, rebuilt, failed, errors };
+}
+
+/**
  * Verify a student's coverage matches their payment history
- * 
+ *
  * @param {string} studentId - Student ID to verify
  * @returns {Promise<{matches: boolean, current: object, expected: object, payments: Array}>}
  */

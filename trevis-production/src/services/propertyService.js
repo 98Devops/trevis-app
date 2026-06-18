@@ -62,13 +62,41 @@ export async function addRoom(propertyId, roomNumber, bedCapacity, rentPerBed, n
 
 export async function updateRoom(roomId, updates) {
   if (!isConfigured) return { data: null, error: { message: 'Not configured' } };
+
+  // Phase 4C-A #5: detect whether rent_per_bed is actually changing, so we only
+  // fan out a (potentially large) coverage rebuild when the daily rate moves.
+  let rentChanged = false;
+  if (Object.prototype.hasOwnProperty.call(updates, 'rent_per_bed')) {
+    const { data: existing } = await supabase
+      .from('rooms')
+      .select('rent_per_bed')
+      .eq('id', roomId)
+      .single();
+    rentChanged = existing && Number(existing.rent_per_bed) !== Number(updates.rent_per_bed);
+  }
+
   const { data, error } = await supabase
     .from('rooms')
     .update(updates)
     .eq('id', roomId)
     .select()
     .single();
-  return { data, error };
+
+  if (error) return { data, error, rebuildError: null };
+
+  // Auto-reconcile: rent change => every ACTIVE student in the room is replayed.
+  let rebuildError = null;
+  if (rentChanged) {
+    const { rebuildRoomCoverage } = await import('./coverageRepairService.js');
+    const result = await rebuildRoomCoverage(roomId);
+    if (!result.success) {
+      rebuildError = new Error(
+        `Room rent updated, but coverage rebuild failed for ${result.failed} student(s): ${result.errors.join('; ')}`
+      );
+    }
+  }
+
+  return { data, error: null, rebuildError };
 }
 
 export async function deleteRoom(roomId) {

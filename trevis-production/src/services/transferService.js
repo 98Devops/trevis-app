@@ -176,17 +176,29 @@ export async function executeTransfer(transferRequest) {
     );
 
     if (transferError) {
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: transferError.message,
         obligationUpdated: false
       };
     }
 
+    // Phase 4C-A #6: the student moved rooms => new rent => new daily rate =>
+    // coverage must be replayed. The RPC changes room_id but does not rebuild.
+    let rebuildError = null;
+    try {
+      const { rebuildStudentCoverage } = await import('./coverageDatabaseService.js');
+      await rebuildStudentCoverage(studentId);
+    } catch (e) {
+      rebuildError = e.message;
+      console.error('[Transfer] coverage rebuild after transfer failed:', e);
+    }
+
     return {
       success: true,
       transferId: transferData?.transfer_id,
-      obligationUpdated: transferData?.obligation_updated || false
+      obligationUpdated: transferData?.obligation_updated || false,
+      rebuildError
     };
 
   } catch (error) {

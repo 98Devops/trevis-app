@@ -39,7 +39,26 @@ export async function updateStudent(id, updates) {
     .eq('id', id)
     .select()
     .single();
-  return { data, error };
+
+  if (error) return { data, error, rebuildError: null };
+
+  // Phase 4C-A #7: room_id change (reassignment) => new rent; status change
+  // (ACTIVE<->other) => coverage applicability changes. Either requires a replay.
+  let rebuildError = null;
+  if (
+    Object.prototype.hasOwnProperty.call(updates, 'room_id') ||
+    Object.prototype.hasOwnProperty.call(updates, 'status')
+  ) {
+    try {
+      const { rebuildStudentCoverage } = await import('./coverageDatabaseService.js');
+      await rebuildStudentCoverage(id);
+    } catch (e) {
+      rebuildError = e.message;
+      console.error('[updateStudent] coverage rebuild failed:', e);
+    }
+  }
+
+  return { data, error: null, rebuildError };
 }
 
 export async function removeStudent(id) {
@@ -50,7 +69,18 @@ export async function removeStudent(id) {
     .eq('id', id)
     .select()
     .single();
-  return { data, error };
+
+  if (error) return { data, error };
+
+  // Phase 4C-A #8: a VACATED student is no longer ACTIVE, so the replay engine
+  // (ACTIVE-only) cannot run. Clear the derived coverage cache so the table never
+  // shows stale coverage for a checked-out tenant. (Ledger/payments untouched.)
+  await supabase
+    .from('students')
+    .update({ coverage_start: null, coverage_end: null, daily_rate: null, next_due_date: null })
+    .eq('id', id);
+
+  return { data, error: null };
 }
 
 export async function searchStudents(query) {
