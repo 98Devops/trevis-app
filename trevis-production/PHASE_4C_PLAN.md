@@ -1,8 +1,30 @@
 # PHASE 4C — PLAN (ledger-as-truth, auto-reconciliation, explainability)
 
-**Date:** 2026-06-18 · **Status:** PLAN ONLY — no code changes. Awaiting approval.
+**Date:** 2026-06-18 · **Status:** ✅ APPROVED 2026-06-18 — starting 4C-A.
 **Origin:** Synthesis of the stabilization sprint + team review of the Onenhlanha investigation.
-**Prereq:** `STABILIZATION_COMPLETION_REPORT.md` approved.
+**Prereq:** `STABILIZATION_COMPLETION_REPORT.md` approved ✅.
+
+## Approved sequencing (A/B/C — per team review amendment)
+
+> The mission has shifted from **repairing data** to **making future drift impossible and instantly
+> visible if it ever reappears.** Integrity → Trust → Performance. Performance is not an emergency
+> (134 students, drift=0); a 40ms-vs-150ms query is irrelevant if the owner doesn't trust the number.
+
+**Phase 4C-A — Integrity (FIRST)**
+1. **Mutation audit matrix** — enumerate every coverage-affecting mutation, document rebuild status. _(start here — investigation, not risky code)_
+2. **Auto-replay all mutation paths** — close gaps; centralize so it can't be forgotten. Highest-risk gap: **rent_per_bed edit** (blast radius = whole room, silent).
+3. **Drift monitor** — R2 → health report, scheduled. _(moved ABOVE timeline: cheap, catches the next drift while the rest is built)_
+4. **Coverage invariants** — `CHECK (coverage_start <= coverage_end)` + derived-cache docs.
+
+**Phase 4C-B — Trust & Explainability**
+5. **Chain-aware timeline** (current chain vs previous expired chains).
+6. **Coverage bar** per student + **integrity status indicator** in admin UI.
+
+**Phase 4C-C — Performance (LAST)**
+7. Single app-level coverage store; TD-7, TD-8, TD-9, PERF-3.
+
+_(The detailed item descriptions below remain valid; the A/B/C grouping above is the authoritative
+execution order.)_
 
 ---
 
