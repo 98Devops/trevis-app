@@ -67,6 +67,18 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
   // unavailable (demo/unconfigured/fetch-failed), preserving demo + test behavior.
   const coverageReady = Array.isArray(coverageStudents);
 
+  // Phase 4C-B #6: in-app coverage integrity indicator. Derived from the
+  // already-fetched coverageStudents (no extra query): flags the corrupt-range
+  // signature (coverage_start > coverage_end) the nightly UTC monitor watches.
+  // Surfaces the monitor's HEALTHY/⚠️ state inside the app.
+  const integrity = useMemo(() => {
+    if (!coverageReady) return null;
+    const corrupt = coverageStudents.filter(
+      s => s.coverage_start && s.coverage_end && s.coverage_start > s.coverage_end
+    ).length;
+    return { healthy: corrupt === 0, corrupt };
+  }, [coverageReady, coverageStudents]);
+
   const allOverdue = useMemo(() => {
     if (!coverageReady) {
       // Legacy fallback (demo mode / coverage fetch failed)
@@ -102,7 +114,23 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
         <h2 style={{ fontSize:13, color:T.gold, textTransform:"uppercase", letterSpacing:"0.15em", fontWeight:600, marginBottom:4 }}>{monthYear}</h2>
         <div style={{ fontSize:11, color:T.subtle, marginBottom:8 }}>{todayLabel}</div>
         <div className="pn-header-row" style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <h1 style={{ fontSize:28, fontWeight:800, color:T.text, margin:0 }}>Portfolio Overview</h1>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <h1 style={{ fontSize:28, fontWeight:800, color:T.text, margin:0 }}>Portfolio Overview</h1>
+            {integrity && (
+              <span
+                title={integrity.healthy
+                  ? "Coverage data matches the payment ledger"
+                  : `${integrity.corrupt} student(s) have a corrupt coverage range — run the repair tool`}
+                style={{
+                  display:"inline-flex", alignItems:"center", gap:5, fontSize:10, fontWeight:700,
+                  textTransform:"uppercase", letterSpacing:"0.06em", padding:"3px 9px", borderRadius:20,
+                  background: integrity.healthy ? T.greenDim : T.redDim,
+                  color: integrity.healthy ? T.green : T.red,
+                }}>
+                {integrity.healthy ? "● Coverage healthy" : `▲ ${integrity.corrupt} coverage issue${integrity.corrupt>1?"s":""}`}
+              </span>
+            )}
+          </div>
           <div style={{ display:"flex", gap:4, background:T.surface, borderRadius:8, padding:2 }}>
             {[["month","This Month"],["all","All Time"]].map(([k,l])=>(
               <button key={k} onClick={()=>setTimeRange(k)} style={{ background:timeRange===k?T.gold:"none", border:"none", borderRadius:6,

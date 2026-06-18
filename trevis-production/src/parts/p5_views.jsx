@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { T, font, fmt, Badge, Stat, Bar, Btn, DateRangeFilter, isUnassignedRecord, filterUnassignedRecords, countOccupiedBeds, getDisplayName } from "./p2_helpers.jsx";
+import { T, font, fmt, Badge, CoverageBar, Stat, Bar, Btn, DateRangeFilter, isUnassignedRecord, filterUnassignedRecords, countOccupiedBeds, getDisplayName } from "./p2_helpers.jsx";
 import { classifyStudent, getStatusBadgeConfig } from "../services/statusClassifier.js";
 import * as CoverageDB from "../services/coverageDatabaseService.js";
 
@@ -250,7 +250,10 @@ function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom, co
                   borderBottom:`1px solid ${T.border}20`,alignItems:"center",cursor:isClickable?"pointer":"default",transition:"background .15s" }}
                 onMouseEnter={e=>{if(isClickable)e.currentTarget.style.background=T.hover}}
                 onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                <div style={{ fontSize:13,color:s.status==="VACANT"||s.status==="VACATED"||isUnassignedRecord(s)?T.muted:T.text,fontWeight:s.status==="VACANT"||isUnassignedRecord(s)?400:600,fontStyle:s.status==="VACANT"||isUnassignedRecord(s)?"italic":"normal" }}>{displayName}</div>
+                <div>
+                  <div style={{ fontSize:13,color:s.status==="VACANT"||s.status==="VACATED"||isUnassignedRecord(s)?T.muted:T.text,fontWeight:s.status==="VACANT"||isUnassignedRecord(s)?400:600,fontStyle:s.status==="VACANT"||isUnassignedRecord(s)?"italic":"normal" }}>{displayName}</div>
+                  {!showLoading && coverage && <div style={{ marginTop:5 }}><CoverageBar coverage={coverage} /></div>}
+                </div>
                 <div style={{ fontSize:12,color:T.subtle,fontFamily:"'IBM Plex Mono',monospace" }}>{s.status==="VACANT"||isUnassignedRecord(s)?"—":`$${s.paid} paid${s.balance>0?` · $${s.balance} bal`:''}`}</div>
                 <div style={{ fontSize:11,color:T.muted }}>{s.date||"—"}</div>
                 <div style={{ justifySelf: "end", display:"flex", alignItems:"center", gap:8 }}>

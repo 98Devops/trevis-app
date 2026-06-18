@@ -24,9 +24,10 @@
 
 **→ Phase 4C-A (Integrity) COMPLETE** once the operator runs R3 + adds the Action secrets.
 
-**Phase 4C-B — Trust & Explainability**
-5. **Chain-aware timeline** (current chain vs previous expired chains).
-6. **Coverage bar** per student + **integrity status indicator** in admin UI.
+**Phase 4C-B — Trust & Explainability** ✅ DONE 2026-06-18
+5. ✅ **Chain-aware timeline** (current chain vs previous expired chains).
+6. ✅ **Coverage bar** per student (battery runway) + **integrity status indicator** on the
+   dashboard ("● Coverage healthy" / "▲ N coverage issues", derived from already-fetched data).
 
 **Phase 4C-C — Performance (LAST)**
 7. Single app-level coverage store; TD-7, TD-8, TD-9, PERF-3.

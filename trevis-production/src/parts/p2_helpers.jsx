@@ -341,6 +341,33 @@ export const Badge = ({ status }) => {
   );
 };
 
+/**
+ * CoverageBar — a thin "battery" of coverage runway (Phase 4C-B #6).
+ * Fills proportional to daysRemaining (capped at 30 for the visual), colored by
+ * coverage status. Overdue shows a small red bar. Purely visual; reads the
+ * classifier output (no calculations).
+ */
+export const CoverageBar = ({ coverage, width = 70 }) => {
+  if (!coverage || coverage.status === 'EXCLUDED') return null;
+  const CAP = 30;
+  const days = coverage.daysRemaining ?? 0;
+  const overdue = coverage.status === 'OVERDUE';
+  const color =
+    coverage.status === 'CURRENT' ? T.green :
+    coverage.status === 'EXPIRING_SOON' ? T.amber :
+    coverage.status === 'DUE_TODAY' ? '#F97316' : T.red;
+  // Overdue: a small fixed sliver. Otherwise proportion of the 30-day window.
+  const pct = overdue ? 12 : Math.max(6, Math.min(100, Math.round((days / CAP) * 100)));
+  const title = overdue
+    ? `${coverage.daysOverdue ?? Math.abs(days)} days overdue`
+    : `${days} days of coverage remaining`;
+  return (
+    <div title={title} style={{ width, height:5, background:T.border, borderRadius:3, overflow:"hidden" }}>
+      <div style={{ width:`${pct}%`, height:"100%", background:color, borderRadius:3, transition:"width .3s" }} />
+    </div>
+  );
+};
+
 export const Stat = ({ label, value, sub, accent }) => (
   <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14,
     padding:"18px 22px", position:"relative", overflow:"hidden" }}>
