@@ -42,16 +42,20 @@ const fmt = (d) => (d ? new Date(d).toISOString().split('T')[0] : null);
 function replayLedger(payments, monthlyRent, status) {
   let coverageEnd = null;
   let final = null;
+  // coverage_start = start of the WHOLE continuous chain (first slice), not the
+  // last payment's slice start. Matches rebuildStudentCoverage().
+  let chainStart = null;
   for (const p of payments) {
     final = processPayment(
       { amount: parseFloat(p.amount), payment_date: p.payment_date },
       { coverage_end: coverageEnd, monthly_rent: monthlyRent, status }
     );
+    if (chainStart === null) chainStart = final.coverageStart;
     coverageEnd = final.coverageEnd;
   }
   if (!final) return { coverage_start: null, coverage_end: null, daily_rate: null, next_due_date: null };
   return {
-    coverage_start: fmt(final.coverageStart),
+    coverage_start: fmt(chainStart),
     coverage_end: fmt(final.coverageEnd),
     daily_rate: final.dailyRate,
     next_due_date: fmt(final.nextDueDate),

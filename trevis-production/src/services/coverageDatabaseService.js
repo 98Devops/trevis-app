@@ -298,6 +298,13 @@ export async function rebuildStudentCoverage(studentId) {
   // 4. Replay all payments through processPayment()
   let currentCoverageEnd = null;
   let finalResult = null;
+  // BUGFIX: the student's coverage_start is the start of the WHOLE continuous
+  // coverage chain (the first payment's start), NOT the last payment's slice
+  // start. processPayment returns the per-payment slice start, so for an
+  // early/stacked final payment finalResult.coverageStart is (existingEnd + 1),
+  // which previously got written as the student's coverage_start — producing the
+  // start==end corruption seen on long-term tenants. Capture the first slice.
+  let chainCoverageStart = null;
 
   for (const payment of payments) {
     const paymentInput = {
@@ -312,6 +319,7 @@ export async function rebuildStudentCoverage(studentId) {
     };
 
     finalResult = processPayment(paymentInput, studentState);
+    if (chainCoverageStart === null) chainCoverageStart = finalResult.coverageStart;
     currentCoverageEnd = finalResult.coverageEnd;
 
     // Update payment record with recalculated coverage metadata
@@ -325,11 +333,12 @@ export async function rebuildStudentCoverage(studentId) {
       .eq('id', payment.id);
   }
 
-  // 5. Update student coverage fields with final state
+  // 5. Update student coverage fields with final state.
+  //    coverage_start = first slice's start (whole chain); coverage_end = final.
   const { error: uErr } = await supabase
     .from('students')
     .update({
-      coverage_start: finalResult.coverageStart,
+      coverage_start: chainCoverageStart,
       coverage_end: finalResult.coverageEnd,
       daily_rate: finalResult.dailyRate,
       next_due_date: finalResult.nextDueDate
@@ -341,7 +350,7 @@ export async function rebuildStudentCoverage(studentId) {
   }
 
   return {
-    coverage_start: finalResult.coverageStart,
+    coverage_start: chainCoverageStart,
     coverage_end: finalResult.coverageEnd,
     daily_rate: finalResult.dailyRate,
     next_due_date: finalResult.nextDueDate

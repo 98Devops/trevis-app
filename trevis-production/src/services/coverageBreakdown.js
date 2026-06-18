@@ -20,6 +20,13 @@ const fmtDate = (d) =>
     ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
     : null;
 
+// Like fmtDate but always includes the year — used when a ledger spans multiple
+// calendar years, so '30 Jul' (2025) can't be mistaken for '30 Jul' (2026).
+const fmtDateYear = (d) =>
+  d
+    ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    : null;
+
 /**
  * Replay a student's payment ledger and return the per-payment coverage stack.
  *
@@ -52,7 +59,8 @@ export function buildCoverageBreakdown(payments, monthlyRent) {
     .filter((p) => p && p.payment_date != null && p.amount != null)
     .sort((a, b) => new Date(a.payment_date) - new Date(b.payment_date));
 
-  const steps = [];
+  // Pass 1: replay and collect raw per-payment data (no labels yet).
+  const raw = [];
   let coverageEnd = null;
   let firstStart = null;
   let totalDays = 0;
@@ -78,31 +86,51 @@ export function buildCoverageBreakdown(payments, monthlyRent) {
     coverageEnd = result.coverageEnd;
     totalDays += result.coverageDays;
 
-    const sign = result.isEarlyPayment ? '+' : '';
-    const tag = result.isEarlyPayment
-      ? ` (early, stacked${result.prepaidDaysPreserved ? `, preserved ${result.prepaidDaysPreserved}d` : ''})`
-      : '';
-    const line = `$${amount} (${fmtDate(p.payment_date)}): ${sign}${result.coverageDays}d → ${fmtDate(endISO)}${tag}`;
-
-    steps.push({
+    raw.push({
       amount,
+      paymentDate: p.payment_date,
       date: toISO(p.payment_date),
-      dateLabel: fmtDate(p.payment_date),
       days: result.coverageDays,
       start: startISO,
       end: endISO,
-      endLabel: fmtDate(endISO),
       isEarly: result.isEarlyPayment,
       prepaidDaysPreserved: result.prepaidDaysPreserved,
-      line,
     });
   }
+
+  // Detect a multi-year span so labels disambiguate '30 Jul' (2025) from (2026).
+  const years = new Set();
+  raw.forEach((s) => {
+    if (s.date) years.add(s.date.slice(0, 4));
+    if (s.end) years.add(s.end.slice(0, 4));
+  });
+  const label = years.size > 1 ? fmtDateYear : fmtDate;
+
+  // Pass 2: build display labels with the chosen formatter.
+  const steps = raw.map((s) => {
+    const sign = s.isEarly ? '+' : '';
+    const tag = s.isEarly
+      ? ` (early, stacked${s.prepaidDaysPreserved ? `, preserved ${s.prepaidDaysPreserved}d` : ''})`
+      : '';
+    return {
+      amount: s.amount,
+      date: s.date,
+      dateLabel: label(s.paymentDate),
+      days: s.days,
+      start: s.start,
+      end: s.end,
+      endLabel: label(s.end),
+      isEarly: s.isEarly,
+      prepaidDaysPreserved: s.prepaidDaysPreserved,
+      line: `$${s.amount} (${label(s.paymentDate)}): ${sign}${s.days}d → ${label(s.end)}${tag}`,
+    };
+  });
 
   return {
     steps,
     totalDays,
     coverageEnd: coverageEnd ? toISO(coverageEnd) : null,
-    coverageEndLabel: coverageEnd ? fmtDate(coverageEnd) : null,
+    coverageEndLabel: coverageEnd ? label(coverageEnd) : null,
     firstStart,
   };
 }

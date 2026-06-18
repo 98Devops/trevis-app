@@ -59,6 +59,12 @@ describe('buildCoverageBreakdown', () => {
     expect(r.coverageEnd).toBe('2026-07-24');
     expect(r.totalDays).toBe(61); // 30 + 31
 
+    // REGRESSION GUARD (coverage_start bug): the chain start is the FIRST
+    // payment's slice start, NEVER the last payment's. A long-term tenant whose
+    // last payment is a tiny early/stacked slice must NOT get start==end.
+    expect(r.firstStart).toBe('2026-05-25'); // first payment, not 2026-06-24
+    expect(r.firstStart).not.toBe(r.coverageEnd);
+
     // 24 Jul - 16 Jun = 38 days remaining (the number on the card)
     const today = new Date('2026-06-16');
     const end = new Date(r.coverageEnd);
@@ -97,6 +103,28 @@ describe('buildCoverageBreakdown', () => {
     );
     expect(r.steps).toHaveLength(1);
     expect(r.coverageEnd).toBe('2026-06-23');
+  });
+
+  it('includes the year in labels when the ledger spans multiple years', () => {
+    // Real Onenhlanha-style: payments in 2025 AND 2026 -> labels must show year.
+    const r = buildCoverageBreakdown(
+      [
+        { amount: 106, payment_date: '2025-07-30' },
+        { amount: 110, payment_date: '2026-05-25' },
+      ],
+      110
+    );
+    expect(r.steps[0].dateLabel).toContain('2025');
+    expect(r.steps[1].dateLabel).toContain('2026');
+    expect(r.coverageEndLabel).toContain('20'); // has a year
+  });
+
+  it('omits the year for a single-year ledger (compact labels)', () => {
+    const r = buildCoverageBreakdown(
+      [{ amount: 110, payment_date: '2026-05-25' }],
+      110
+    );
+    expect(r.steps[0].dateLabel).toBe('25 May');
   });
 
   it('produces a ready-to-render line string per step', () => {

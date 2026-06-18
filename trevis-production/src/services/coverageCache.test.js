@@ -293,30 +293,41 @@ describe('BC-8: Coverage Cache Reliability', () => {
       // - 1 OVERDUE
       // After payment on OVERDUE student, room aggregation should update
       
+      // Build fixtures RELATIVE TO TODAY so the scenario is deterministic
+      // regardless of when the suite runs (the previous hardcoded 2026 dates
+      // silently broke once the wall-clock passed them).
+      const isoFromToday = (days) => {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        d.setDate(d.getDate() + days);
+        return d.toISOString().split('T')[0];
+      };
+
       const students = [
-        createActiveStudent('2026-08-15', '2026-07-01', 3.67), // CURRENT (45 days)
-        createActiveStudent('2026-08-10', '2026-07-01', 3.67), // CURRENT (40 days)
-        createActiveStudent('2026-07-05', '2026-06-15', 3.67), // EXPIRING_SOON (4 days)
-        createActiveStudent('2026-06-25', '2026-06-01', 3.67)  // OVERDUE (-6 days)
+        createActiveStudent(isoFromToday(45), isoFromToday(-15), 3.67), // CURRENT
+        createActiveStudent(isoFromToday(40), isoFromToday(-15), 3.67), // CURRENT
+        createActiveStudent(isoFromToday(4),  isoFromToday(-25), 3.67), // EXPIRING_SOON
+        createActiveStudent(isoFromToday(-6), isoFromToday(-35), 3.67)  // OVERDUE
       ];
 
       // Classify all students
       const beforeClassifications = students.map(s => classifyStudent(s));
 
-      // Count by status (dates are from 2026, so all will show as CURRENT from today's perspective)
+      // Count by status
       const beforeCounts = beforeClassifications.reduce((acc, c) => {
         acc[c.status] = (acc[c.status] || 0) + 1;
         return acc;
       }, {});
 
-      // All students from 2026 appear as CURRENT from today's perspective
-      expect(beforeCounts.CURRENT).toBeGreaterThanOrEqual(4);
-      // Note: Test dates are in 2026, so classification is relative to current date
+      // Deterministic scenario: 2 CURRENT, 1 EXPIRING_SOON, 1 OVERDUE.
+      expect(beforeCounts.CURRENT).toBe(2);
+      expect(beforeCounts.EXPIRING_SOON).toBe(1);
+      expect(beforeCounts.OVERDUE).toBe(1);
 
       // Record payment for OVERDUE student (index 3)
       const payment = {
         amount: 110,
-        payment_date: '2026-07-01'
+        payment_date: isoFromToday(0)
       };
 
       const student4 = {
@@ -344,8 +355,10 @@ describe('BC-8: Coverage Cache Reliability', () => {
         return acc;
       }, {});
 
-      // After payment: OVERDUE student becomes CURRENT
-      expect(afterCounts.CURRENT).toBeGreaterThanOrEqual(4); // At least all 4 students are CURRENT
+      // After payment: the paid (formerly OVERDUE) student becomes CURRENT,
+      // joining the 2 already-CURRENT. The EXPIRING_SOON student is untouched.
+      expect(afterCounts.CURRENT).toBe(3);
+      expect(afterCounts.OVERDUE || 0).toBe(0);
       
       // CRITICAL: Room footer "Coverage Rate" should update
       // All students should have valid coverage after payment
