@@ -105,6 +105,36 @@ describe('buildCoverageBreakdown', () => {
     expect(r.coverageEnd).toBe('2026-06-23');
   });
 
+  it('resets chain start (firstStart) after a coverage GAP', () => {
+    // Pay 1 month in Jan (covers ~Jan 1..30), then disappear, then pay again in
+    // Jun (coverage long lapsed). The Jun payment is a NORMAL (non-early)
+    // payment, so it begins a NEW continuous chain — firstStart must be Jun,
+    // NOT Jan, and NOT the last slice.
+    const r = buildCoverageBreakdown(
+      [
+        { amount: 110, payment_date: '2026-01-01' }, // chain 1: 01 Jan..30 Jan
+        { amount: 110, payment_date: '2026-06-01' }, // gap! new chain: 01 Jun..
+      ],
+      110
+    );
+    expect(r.steps).toHaveLength(2);
+    expect(r.steps[1].isEarly).toBe(false); // gap -> normal payment
+    expect(r.firstStart).toBe('2026-06-01'); // chain reset, not 2026-01-01
+    expect(r.coverageEnd).toBe('2026-06-30');
+  });
+
+  it('does NOT reset chain start when payments are continuous (early/stacked)', () => {
+    const r = buildCoverageBreakdown(
+      [
+        { amount: 110, payment_date: '2026-05-25' },
+        { amount: 114, payment_date: '2026-06-02' }, // early, within coverage
+      ],
+      110
+    );
+    expect(r.steps[1].isEarly).toBe(true);
+    expect(r.firstStart).toBe('2026-05-25'); // unbroken chain keeps original start
+  });
+
   it('includes the year in labels when the ledger spans multiple years', () => {
     // Real Onenhlanha-style: payments in 2025 AND 2026 -> labels must show year.
     const r = buildCoverageBreakdown(

@@ -62,7 +62,9 @@ export function buildCoverageBreakdown(payments, monthlyRent) {
   // Pass 1: replay and collect raw per-payment data (no labels yet).
   const raw = [];
   let coverageEnd = null;
-  let firstStart = null;
+  // chainStart = start of the CURRENT continuous coverage chain (resets after a
+  // gap), matching rebuildStudentCoverage() / R2. Exposed as `firstStart`.
+  let chainStart = null;
   let totalDays = 0;
 
   for (const p of ordered) {
@@ -82,7 +84,7 @@ export function buildCoverageBreakdown(payments, monthlyRent) {
 
     const startISO = toISO(result.coverageStart);
     const endISO = toISO(result.coverageEnd);
-    if (firstStart === null) firstStart = startISO;
+    if (chainStart === null || !result.isEarlyPayment) chainStart = startISO;
     coverageEnd = result.coverageEnd;
     totalDays += result.coverageDays;
 
@@ -131,7 +133,7 @@ export function buildCoverageBreakdown(payments, monthlyRent) {
     totalDays,
     coverageEnd: coverageEnd ? toISO(coverageEnd) : null,
     coverageEndLabel: coverageEnd ? label(coverageEnd) : null,
-    firstStart,
+    firstStart: chainStart, // start of current continuous chain
   };
 }
 

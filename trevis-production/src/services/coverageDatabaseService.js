@@ -298,12 +298,15 @@ export async function rebuildStudentCoverage(studentId) {
   // 4. Replay all payments through processPayment()
   let currentCoverageEnd = null;
   let finalResult = null;
-  // BUGFIX: the student's coverage_start is the start of the WHOLE continuous
-  // coverage chain (the first payment's start), NOT the last payment's slice
-  // start. processPayment returns the per-payment slice start, so for an
-  // early/stacked final payment finalResult.coverageStart is (existingEnd + 1),
-  // which previously got written as the student's coverage_start — producing the
-  // start==end corruption seen on long-term tenants. Capture the first slice.
+  // BUGFIX: the student's coverage_start is the start of the CURRENT CONTINUOUS
+  // coverage chain, NOT the last payment's slice start (that produced the
+  // start==end corruption on long-term tenants) and NOT the first payment ever.
+  //
+  // A payment that lands WITHIN existing coverage is an "early/stacked" payment
+  // (isEarlyPayment=true) and continues the chain. A payment that lands AFTER
+  // coverage has already lapsed comes back as a NORMAL payment — that marks a
+  // GAP, so a new continuous chain begins there. We therefore (re)set the chain
+  // start on every non-early payment.
   let chainCoverageStart = null;
 
   for (const payment of payments) {
@@ -319,7 +322,10 @@ export async function rebuildStudentCoverage(studentId) {
     };
 
     finalResult = processPayment(paymentInput, studentState);
-    if (chainCoverageStart === null) chainCoverageStart = finalResult.coverageStart;
+    // New chain starts on the first payment OR after any coverage gap.
+    if (chainCoverageStart === null || !finalResult.isEarlyPayment) {
+      chainCoverageStart = finalResult.coverageStart;
+    }
     currentCoverageEnd = finalResult.coverageEnd;
 
     // Update payment record with recalculated coverage metadata
