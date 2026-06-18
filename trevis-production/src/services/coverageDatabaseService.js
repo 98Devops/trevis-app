@@ -34,6 +34,7 @@
 import { supabase } from '../lib/supabase.js';
 import { processPayment } from './paymentProcessor.js';
 import { classifyPortfolio } from './statusClassifier.js';
+import { toLocalISO } from './dateUtil.js';
 
 /**
  * Record payment and update student coverage
@@ -346,12 +347,15 @@ export async function rebuildStudentCoverage(studentId) {
     }
     currentCoverageEnd = finalResult.coverageEnd;
 
-    // Update payment record with recalculated coverage metadata
+    // Update payment record with recalculated coverage metadata.
+    // toLocalISO: store the engine's LOCAL calendar day. Passing raw Date objects
+    // lets the client serialize them as UTC, shifting dates by a day in non-UTC
+    // zones (the 2026-06-18 timezone bug).
     await supabase
       .from('payments')
       .update({
-        coverage_start_date: finalResult.coverageStart,
-        coverage_end_date: finalResult.coverageEnd,
+        coverage_start_date: toLocalISO(finalResult.coverageStart),
+        coverage_end_date: toLocalISO(finalResult.coverageEnd),
         days_covered: finalResult.coverageDays
       })
       .eq('id', payment.id);
@@ -359,13 +363,14 @@ export async function rebuildStudentCoverage(studentId) {
 
   // 5. Update student coverage fields with final state.
   //    coverage_start = first slice's start (whole chain); coverage_end = final.
+  //    All dates serialized via toLocalISO (timezone-safe — see above).
   const { error: uErr } = await supabase
     .from('students')
     .update({
-      coverage_start: chainCoverageStart,
-      coverage_end: finalResult.coverageEnd,
+      coverage_start: toLocalISO(chainCoverageStart),
+      coverage_end: toLocalISO(finalResult.coverageEnd),
       daily_rate: finalResult.dailyRate,
-      next_due_date: finalResult.nextDueDate
+      next_due_date: toLocalISO(finalResult.nextDueDate)
     })
     .eq('id', studentId);
 

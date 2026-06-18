@@ -14,6 +14,7 @@
  */
 
 import { processPayment } from './paymentProcessor.js';
+import { toLocalISO } from './dateUtil.js';
 
 const fmtDate = (d) =>
   d
@@ -157,9 +158,8 @@ export function buildCoverageBreakdown(payments, monthlyRent) {
   };
 }
 
+// Timezone-safe: serialize by LOCAL calendar day (the engine builds dates in
+// local time). Using toISOString() here shifts dates by a day in non-UTC zones.
 function toISO(d) {
-  if (!d) return null;
-  const date = new Date(d);
-  if (isNaN(date.getTime())) return null;
-  return date.toISOString().split('T')[0];
+  return toLocalISO(d);
 }

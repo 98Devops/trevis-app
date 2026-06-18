@@ -39,7 +39,11 @@ if (!url || !key) {
 }
 const supabase = createClient(url, key);
 
-const fmt = (d) => (d ? new Date(d).toISOString().split('T')[0] : null);
+// Timezone-safe: serialize by LOCAL calendar day to match the engine (which
+// builds dates with setDate/getDate). toISOString() would shift dates a day in
+// non-UTC zones — the bug that made R2 report different results in CI vs local.
+import { toLocalISO } from '../src/services/dateUtil.js';
+const fmt = (d) => toLocalISO(d);
 
 /** Replay one student's ledger through the engine. Returns the final coverage state. */
 function replayLedger(payments, monthlyRent, status) {
