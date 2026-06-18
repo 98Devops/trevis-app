@@ -29,8 +29,14 @@
 6. ✅ **Coverage bar** per student (battery runway) + **integrity status indicator** on the
    dashboard ("● Coverage healthy" / "▲ N coverage issues", derived from already-fetched data).
 
-**Phase 4C-C — Performance (LAST)**
-7. Single app-level coverage store; TD-7, TD-8, TD-9, PERF-3.
+**Phase 4C-C — Performance (LAST)** ✅ DONE 2026-06-18
+7. ✅ Single app-level coverage store (`src/hooks/useCoverageStore.js`): one
+   `getAllStudentsCoverage()` fetch shared by dashboard + every PropertyDetail.
+   - **TD-7** (N+1 per-property cold fetch) — gone; PropertyDetail slices the shared map.
+   - **PERF-3** (PropertyDetail re-fetching dashboard data) — gone; same store.
+   - **TD-9** (duplicate dashboard `getAllStudentsCoverage`) — gone; dashboard reads shared.
+   - **TD-8** (coarse `new Map()` invalidation) — replaced by one `store.refresh()`;
+     existing `setCoverageCache(new Map())` call sites shimmed to refresh, no churn.
 
 _(The detailed item descriptions below remain valid; the A/B/C grouping above is the authoritative
 execution order.)_

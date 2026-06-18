@@ -9,6 +9,7 @@ import { Finances } from "./parts/p7_arrears.jsx";
 import { Calendar } from "./parts/p8_calendar.jsx";
 import { SettingsPanel } from "./parts/p9_settings.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
+import { useCoverageStore } from "./hooks/useCoverageStore.js";
 
 /* ═══════════════════════════════════════════════════════════
    NAVIGATION
@@ -117,10 +118,15 @@ function AppInner() {
   const [financesFilter, setFinancesFilter] = useState("ALL");
   const [showSettings, setShowSettings] = useState(false);
   
-  // Phase 4B.9: Coverage cache (studentId → coverage classification)
-  // Prevents duplicate coverage fetches when revisiting properties
-  const [coverageCache, setCoverageCache] = useState(new Map());
-  const [coverageCacheTimestamp, setCoverageCacheTimestamp] = useState(Date.now());
+  // Phase 4C-C: single app-level coverage store (one fetch shared by dashboard +
+  // property views), replacing the per-property N+1 cache. refresh() after any
+  // mutation re-syncs everything (no scattered `new Map()` invalidations).
+  const coverage = useCoverageStore(isConfigured);
+  // Back-compat shim: existing handlers call setCoverageCache(new Map()) to
+  // invalidate. Route that to a single store refresh so we don't have to touch
+  // every call site. (setCoverageCacheTimestamp becomes a no-op.)
+  const setCoverageCache = useCallback(() => coverage.refresh(), [coverage]);
+  const setCoverageCacheTimestamp = useCallback(() => {}, []);
 
   // Build UI props from raw Supabase data or use demo
   const props = useMemo(() => {
@@ -373,6 +379,8 @@ function AppInner() {
                 onRecordPayment={()=>{setPaymentProp(null);setShowPayment(true);}}
                 onExport={handleExportCSV}
                 onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}}
+                sharedCoverageStudents={coverage.students}
+                sharedCoverageLoading={coverage.loading}
                 onPropertyCardClick={handlePropertyCardClick} />
             </ErrorBoundary>
           )}
@@ -385,9 +393,8 @@ function AppInner() {
                 onStudentClick={(s,r,pn)=>{setProfileStudent(s);setProfileRoom(r);setProfilePropName(pn);}}
                 onExport={handlePropertyExport}
                 onRemoveRoom={handleRemoveRoom}
-                coverageCache={coverageCache}
-                setCoverageCache={setCoverageCache}
-                coverageCacheTimestamp={coverageCacheTimestamp}
+                sharedCoverageMap={coverage.coverageMap}
+                isLoadingCoverage={coverage.loading}
                 isAdmin={isAdmin} />
             </ErrorBoundary>
           )}

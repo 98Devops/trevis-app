@@ -6,7 +6,7 @@ import { buildAttentionList, countAttentionByProperty } from "../services/dashbo
 /* ═══════════════════════════════════════════════════════════
    DASHBOARD VIEW
 ═══════════════════════════════════════════════════════════ */
-export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onExport, onStudentClick, onPropertyCardClick }) {
+export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onExport, onStudentClick, onPropertyCardClick, sharedCoverageStudents, sharedCoverageLoading }) {
   const [timeRange, setTimeRange] = useState("month");
   const [sortCol, setSortCol] = useState("name");
   const [sortDir, setSortDir] = useState(1);
@@ -23,18 +23,20 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
   // it stays in sync with mutations (which already change props / invalidate cache).
   const [coverageStudents, setCoverageStudents] = useState(null);
 
+  // Phase 4C-C: the big student dataset (attention list, badges, integrity
+  // indicator) comes from the shared app-level coverage store — no second
+  // getAllStudentsCoverage() query here (TD-9). We still fetch the lightweight
+  // KPI strip via getDashboardKPIs(). Falls back to a self-fetch when the shared
+  // store isn't provided (tests / standalone use).
+  const useShared = Array.isArray(sharedCoverageStudents);
+
   useEffect(() => {
     let cancelled = false;
-    const timerId = `getDashboardKPIs-${Date.now()}`;
-
     async function fetchKPIs() {
       setIsLoadingKPIs(true);
-      console.time(`[Perf] ${timerId}`);
-      const [kpis, students] = await Promise.all([
-        CoverageDB.getDashboardKPIs(),
-        CoverageDB.getAllStudentsCoverage(),
-      ]);
-      console.timeEnd(`[Perf] ${timerId}`);
+      const kpis = await CoverageDB.getDashboardKPIs();
+      let students = sharedCoverageStudents;
+      if (!useShared) students = await CoverageDB.getAllStudentsCoverage();
       if (!cancelled) {
         setCoverageKPIs(kpis);
         setCoverageStudents(students);
@@ -42,9 +44,8 @@ export function Dashboard({ props, onSelect, onAddStudent, onRecordPayment, onEx
       }
     }
     fetchKPIs();
-
     return () => { cancelled = true; };
-  }, [props]); // Refetch when properties change
+  }, [props, useShared, sharedCoverageStudents]);
 
   const totals = useMemo(() => props.reduce((a, p) => ({
     students:  a.students  + p.students,

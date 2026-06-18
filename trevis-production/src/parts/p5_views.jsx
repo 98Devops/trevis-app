@@ -6,91 +6,16 @@ import * as CoverageDB from "../services/coverageDatabaseService.js";
 /* ═══════════════════════════════════════════════════════════
    PROPERTY DETAIL VIEW
 ═══════════════════════════════════════════════════════════ */
-export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, onAddRoom, onStudentClick, isAdmin, onExport, onRemoveRoom, coverageCache, setCoverageCache, coverageCacheTimestamp }) {
+export function PropertyDetail({ name, props, onBack, onOpenPay, onAddStudent, onAddRoom, onStudentClick, isAdmin, onExport, onRemoveRoom, sharedCoverageMap, isLoadingCoverage }) {
   const prop = props.find(p => p.name === name);
   const ac = T.prop[name] || { accent: T.gold };
   const [search, setSearch] = useState("");
-  
-  // Phase 4B: Fetch coverage data for all students in this property
-  // READ ONLY - no calculations, enriches students with coverage classification
-  const [coverageMap, setCoverageMap] = useState(new Map());
-  const [isLoadingCoverage, setIsLoadingCoverage] = useState(true);
-  
-  useEffect(() => {
-    let cancelled = false;
-    
-    async function fetchCoverage() {
-      setIsLoadingCoverage(true);
-      const newCoverageMap = new Map(coverageCache || new Map()); // Start with cache
-      
-      // Get all REAL student IDs from this property (exclude VACANT placeholders)
-      const realStudents = prop.rooms.flatMap(r => 
-        r.students.filter(s => {
-          // CRITICAL: Skip synthetic vacant IDs and VACANT/VACATED status
-          const isVacantPlaceholder = s.id && (
-            String(s.id).startsWith('vacant-') || 
-            s.status === 'VACANT' || 
-            s.status === 'VACATED'
-          );
-          return !isVacantPlaceholder && s.id;
-        })
-      );
-      
-      // Phase 4B.9: Only fetch students NOT in cache
-      const studentsToFetch = realStudents.filter(s => !coverageCache?.has(s.id));
-      
-      console.log(`[Phase4B.9] Coverage cache: ${coverageCache?.size || 0} cached, ${studentsToFetch.length} to fetch`);
-      
-      if (studentsToFetch.length > 0) {
-        const timerId = `fetchCoverage-${name}-${Date.now()}`;
-        console.time(`[Perf] ${timerId}`);
-        
-        // Fetch coverage for uncached students only in parallel
-        const coveragePromises = studentsToFetch.map(async (student) => {
-          try {
-            const coverageData = await CoverageDB.getStudentCoverageData(student.id);
-            if (coverageData && coverageData.status === 'ACTIVE') {
-              // Use statusClassifier to get coverage status - NO CALCULATIONS HERE
-              const classification = classifyStudent(coverageData);
-              return { studentId: student.id, classification };
-            }
-          } catch (err) {
-            console.error(`[Phase4B] Coverage fetch failed for ${student.name}:`, err.message);
-          }
-          return null;
-        });
-        
-        const results = await Promise.all(coveragePromises);
-        console.timeEnd(`[Perf] ${timerId}`);
-        
-        // Update cache with new results
-        results.forEach(result => {
-          if (result && !cancelled) {
-            newCoverageMap.set(result.studentId, result.classification);
-          }
-        });
-        
-        // Update cache in App state
-        if (!cancelled && setCoverageCache) {
-          setCoverageCache(newCoverageMap);
-        }
-      } else {
-        console.log(`[Phase4B.9] All ${realStudents.length} students loaded from cache ✅`);
-      }
-      
-      if (!cancelled) {
-        console.log(`[Phase4B] Coverage hydrated: ${newCoverageMap.size} students classified`);
-        setCoverageMap(newCoverageMap);
-        setIsLoadingCoverage(false);
-      }
-    }
-    
-    if (prop && prop.rooms) {
-      fetchCoverage();
-    }
-    
-    return () => { cancelled = true; };
-  }, [name, prop, coverageCache, setCoverageCache, coverageCacheTimestamp]); // Cache deps added
+
+  // Phase 4C-C: coverage comes from the single app-level store (one fetch shared
+  // with the dashboard) instead of a per-property N+1 loop. The store already
+  // holds classifyStudent() results keyed by studentId — use it directly.
+  const coverageMap = sharedCoverageMap || new Map();
+
   const pct = prop.expected > 0 ? ((prop.collected / prop.expected)*100).toFixed(1) : "0.0";
   const filtered = prop.rooms.filter(r =>
     !search || r.no.toLowerCase().includes(search.toLowerCase()) ||
