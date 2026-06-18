@@ -13,8 +13,11 @@
 **Phase 4C-A — Integrity (FIRST)**
 1. **Mutation audit matrix** — enumerate every coverage-affecting mutation, document rebuild status. _(start here — investigation, not risky code)_
 2. **Auto-replay all mutation paths** — close gaps; centralize so it can't be forgotten. Highest-risk gap: **rent_per_bed edit** (blast radius = whole room, silent).
-3. **Drift monitor** — R2 → health report, scheduled. _(moved ABOVE timeline: cheap, catches the next drift while the rest is built)_
-4. **Coverage invariants** — `CHECK (coverage_start <= coverage_end)` + derived-cache docs.
+3. ✅ **Drift monitor (DONE 2026-06-18)** — R2 `--report` emits a Coverage Integrity Report
+   (checked/drifted/corrupt-ranges/reductions, `STATUS: HEALTHY`), read-only, non-zero exit on any
+   problem. Scheduled nightly via `.github/workflows/coverage-integrity.yml` (02:00 UTC +
+   manual dispatch). **Operator: add repo secrets `SUPABASE_URL` + `SUPABASE_SERVICE_KEY`.**
+4. **Coverage invariants** — `CHECK (coverage_start <= coverage_end)` + derived-cache docs. _(next)_
 
 **Phase 4C-B — Trust & Explainability**
 5. **Chain-aware timeline** (current chain vs previous expired chains).

@@ -1,0 +1,39 @@
+# Coverage Integrity Monitor (Phase 4C-A #3)
+#
+# Nightly read-only audit: replays the payment ledger for every ACTIVE student
+# and asserts the stored coverage cache still matches. Fails the run (red ✖ +
+# email from GitHub) if anything drifted, a coverage range is corrupt, or any
+# student would lose days. A money system should constantly prove it's healthy.
+#
+# REQUIRED REPO SECRETS (Settings → Secrets and variables → Actions):
+#   SUPABASE_URL          = https://<project>.supabase.co
+#   SUPABASE_SERVICE_KEY  = service_role key (bypasses RLS; read-only here)
+#
+# The job NEVER writes — it runs `--report` (read-only), which exits non-zero on
+# any problem. No --apply is ever invoked from CI.
+
+name: Coverage Integrity Monitor
+
+on:
+  schedule:
+    - cron: '0 2 * * *'   # 02:00 UTC daily
+  workflow_dispatch: {}    # allow manual "Run workflow"
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Run coverage integrity report (read-only)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node scripts/replay_portfolio_coverage.mjs --report

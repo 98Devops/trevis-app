@@ -26,6 +26,9 @@ import { processPayment } from '../src/services/paymentProcessor.js';
 
 const APPLY = process.argv.includes('--apply');
 const VERBOSE = process.argv.includes('--verbose');
+// --report: emit a structured Coverage Integrity Report (for nightly cron/CI).
+// Read-only; never writes; exits non-zero if the portfolio is not HEALTHY.
+const REPORT = process.argv.includes('--report');
 const MODE = APPLY ? 'APPLY (writing)' : 'DRY-RUN (no writes)';
 
 const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -75,6 +78,7 @@ async function main() {
   if (error) { console.error('Failed to fetch students:', error.message); process.exit(1); }
 
   let checked = 0, drifted = 0, written = 0, skipped = 0, failed = 0;
+  let corruptRanges = 0; // stored coverage_start >= coverage_end (the exact bug signature)
   const driftRows = [];
 
   for (const s of students) {
@@ -98,6 +102,10 @@ async function main() {
       daily_rate: s.daily_rate == null ? null : Number(s.daily_rate),
       next_due_date: s.next_due_date,
     };
+    // Corrupt range = the coverage_start bug signature (start collapsed onto/past end).
+    if (stored.coverage_start && stored.coverage_end && stored.coverage_start >= stored.coverage_end) {
+      corruptRanges++;
+    }
     const isDrift =
       stored.coverage_start !== expected.coverage_start ||
       stored.coverage_end   !== expected.coverage_end   ||
@@ -130,7 +138,7 @@ async function main() {
                     (stored.daily_rate !== expected.daily_rate ? ` | rate ${stored.daily_rate}->${expected.daily_rate}` : ''));
       }
 
-      if (APPLY) {
+      if (APPLY && !REPORT) {
         const { error: uErr } = await supabase.from('students').update(expected).eq('id', s.id);
         if (uErr) { failed++; console.error(`  WRITE FAIL ${s.full_name}: ${uErr.message}`); }
         else { written++; }
@@ -142,9 +150,33 @@ async function main() {
   const endLater   = driftRows.filter(r => r.endLater).length;
   const endEqual   = driftRows.filter(r => r.endOnly).length;
 
+  // ── Health report mode (4C-A #3): structured, scheduler-friendly output. ──
+  if (REPORT) {
+    const healthy = drifted === 0 && corruptRanges === 0 && endEarlier === 0 && failed === 0;
+    console.log(`\nCoverage Integrity Report`);
+    console.log(`-------------------------`);
+    console.log(`Students checked:    ${checked}`);
+    console.log(`Drifted:             ${drifted}`);
+    console.log(`Corrupt ranges:      ${corruptRanges}   (coverage_start >= coverage_end)`);
+    console.log(`Coverage reductions: ${endEarlier}   (coverage_end would move earlier)`);
+    console.log(`Skipped (no room):   ${skipped}`);
+    console.log(`Failed:              ${failed}`);
+    console.log(`Last audit:          ${new Date().toISOString()}`);
+    console.log(``);
+    console.log(`STATUS: ${healthy ? 'HEALTHY ✅' : 'NEEDS ATTENTION ⚠️'}`);
+    if (!healthy) {
+      if (drifted > 0)       console.log(`  → ${drifted} student(s) drifted from the ledger. Run --dry-run --verbose to inspect, then --apply.`);
+      if (corruptRanges > 0) console.log(`  → ${corruptRanges} corrupt coverage range(s). See supabase/AUDIT_coverage_start_bug.sql.`);
+      if (endEarlier > 0)    console.log(`  → ${endEarlier} would lose coverage days — investigate before applying.`);
+      if (failed > 0)        console.log(`  → ${failed} student(s) failed to evaluate.`);
+    }
+    // Non-zero exit on any problem so cron/CI can alarm.
+    process.exit(healthy ? 0 : 1);
+  }
+
   console.log(`\n=== SUMMARY (${MODE}) ===`);
   console.log(`Checked: ${checked} | Drifted: ${drifted} | ${APPLY ? 'Written' : 'Would write'}: ${APPLY ? written : drifted} | Skipped(no room): ${skipped} | Failed: ${failed}`);
-  console.log(`coverage_end direction → later: ${endLater} | equal (other-field drift): ${endEqual} | ⚠️ EARLIER: ${endEarlier}`);
+  console.log(`coverage_end direction → later: ${endLater} | equal (other-field drift): ${endEqual} | ⚠️ EARLIER: ${endEarlier} | corrupt ranges: ${corruptRanges}`);
   if (endEarlier > 0) console.log(`\n🛑 STOP: ${endEarlier} student(s) would have coverage_end moved EARLIER. This violates the safety invariant. Do NOT --apply until investigated.`);
   if (!APPLY && drifted > 0) console.log(`\nRe-run with --apply to correct the ${drifted} drifted student(s). Back up first.`);
   if (drifted === 0) console.log(`\n✅ All ACTIVE students already match the JS engine. No drift.`);
