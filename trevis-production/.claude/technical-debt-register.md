@@ -124,20 +124,24 @@ Legend: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low
 - **Fix:** Disable the submit button while in flight; ideally an idempotency key or
   recent-duplicate check (same student/amount/date within N seconds).
 
-## TD-7 🟡 N+1 per-student coverage fetch
+## TD-7 ✅ RESOLVED (Phase 4C-C 2026-06-18) — N+1 per-student coverage fetch
+> Resolved by the single app-level coverage store (`src/hooks/useCoverageStore.js`). One
+> `getAllStudentsCoverage()` fetch is shared by the dashboard and every PropertyDetail; PropertyDetail
+> now slices the shared `studentId → classification` map instead of looping `getStudentCoverageData`
+> per student. Cold-load is O(1) queries, not O(students). Also closed PERF-3 (PropertyDetail
+> re-fetching what the dashboard already had). See `PHASE_4C_PLAN.md` 4C-C. Original analysis below.
+
 - **Where:** `p5_views PropertyDetail` — `studentsToFetch.map(getStudentCoverageData)` in
   `Promise.all` (one round-trip per uncached student) + a separate `getDashboardKPIs`.
-- **Risk:** Cold-load latency scales with student count; redundant with `getAllStudentsCoverage`
-  which can return everything in one query.
-- **Fix:** Batch into a single query/view per property (or reuse one app-level coverage fetch).
-  Cache already mitigates repeat visits, but first paint is still O(students).
 
-## TD-8 🟡 Coarse cache invalidation + implicit contract
-- **Where:** every mutation does `setCoverageCache(new Map())`.
-- **Risk:** Nukes all cached students on any single change; correctness depends on every future
-  mutation *remembering* to invalidate (no enforced wrapper). Fine at current scale, fragile later.
-- **Fix:** Invalidate per-student (delete the touched id), and centralize mutation+invalidation in
-  one helper so it can't be forgotten.
+## TD-8 ✅ RESOLVED (Phase 4C-C 2026-06-18) — Coarse cache invalidation + implicit contract
+> Resolved with the app-level store: invalidation is a single `store.refresh()` (one re-fetch),
+> and the scattered `setCoverageCache(new Map())` call sites are shimmed to call it — so a mutation
+> can't forget to invalidate. The derived-cache contract is also documented at the top of
+> `coverageDatabaseService.js` and enforced by the mutation matrix (every coverage-input mutation
+> rebuilds). Original analysis below.
+
+- **Where:** every mutation did `setCoverageCache(new Map())`.
 
 ## TD-9 ✅ FULLY CLOSED (code + data + live DB) — Coverage source-of-truth split (JS vs SQL)
 > **coverage_start BUG FOUND + FIXED + REPAIRED 2026-06-18.** A raw-table query (team review)
@@ -231,11 +235,18 @@ Legend: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low
 - **Fix:** Remove/relocate `build_app.cjs` or document it as legacy; gate verbose logs behind a
   debug flag; route to a real logger for production observability.
 
-## TD-14 🟢 Phase 4B.11 changes uncommitted
-- **Where:** working tree (`App.jsx`, `p3_modals.jsx`, `coverageCache.test.js`).
-- **Risk:** Edit/delete cache invalidation + BC-9 tests aren't in git; a reset would lose them and
-  reintroduce the "must press F5 after edit" bug.
-- **Fix:** Run `npm test`, verify green, commit + tag per `PHASE4B.11_COMPLETE.md`.
+## TD-14 ✅ RESOLVED — Phase 4B.11 changes committed
+> All work is committed and pushed to `main` (tag `coverage-audit-complete`); the coverage store
+> refactor in 4C-C superseded the old cache entirely. No uncommitted coverage work remains.
+
+## TD-15 🟡 Room deletion can orphan students' coverage (mutation matrix #10)
+- **Where:** `propertyService.deleteRoom` / `removeRoom` — deleting a room doesn't rebuild/clear
+  coverage for any students still pointing at it.
+- **Risk:** Orphaned students with a dangling `room_id` → no rent → stale/again-null coverage. Low
+  likelihood (UI blocks removing a room with active students), but the data path isn't guarded.
+- **Fix:** Block deletion if ACTIVE students remain (UI already warns; enforce in service), or
+  cascade a coverage clear. Deferred — see `COVERAGE_MUTATION_MATRIX.md` #10. Separate from the
+  data-cleansing concern (`DATABASE_CLEANSING_PLAN §7`).
 
 ---
 
