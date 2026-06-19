@@ -73,25 +73,34 @@ async function gatherMetrics() {
   };
 }
 
+// Emoji as explicit Unicode escapes — encoding-proof across PowerShell -> Node ->
+// HTTP -> WhatsApp/email (raw emoji literals were arriving as replacement chars).
+const E = {
+  house: '\u{1F3E0}', people: '\u{1F465}', bed: '\u{1F6CF}',
+  money: '\u{1F4B0}', chart: '\u{1F4C8}', red: '\u{1F534}', orange: '\u{1F7E0}',
+  bullet: '•',
+};
+
 /** Plain-text WhatsApp-style summary (short). */
 function buildWhatsAppText(m) {
+  const occ = m.totalBeds ? ` (${Math.round((m.occupiedBeds / m.totalBeds) * 100)}%)` : '';
   const lines = [
-    '🏠 *TREVIS Daily Report*',
+    `${E.house} *TREVIS Daily Report*`,
     `_${todayLabel}_`,
     '',
-    `👥 Active: ${m.activeCount}`,
-    `🛏 Occupancy: ${m.occupiedBeds}/${m.totalBeds}` + (m.totalBeds ? ` (${Math.round((m.occupiedBeds / m.totalBeds) * 100)}%)` : ''),
+    `${E.people} Active: ${m.activeCount}`,
+    `${E.bed} Occupancy: ${m.occupiedBeds}/${m.totalBeds}${occ}`,
     '',
-    `💰 Outstanding: ${money(m.outstanding)}`,
-    `📈 Accruing: ${money(m.accruingPerDay)}/day`,
+    `${E.money} Outstanding: ${money(m.outstanding)}`,
+    `${E.chart} Accruing: ${money(m.accruingPerDay)}/day`,
     '',
-    `🔴 Overdue: ${m.overdue.length}`,
-    `🟠 Expiring ≤7d: ${m.expiring.length}`,
+    `${E.red} Overdue: ${m.overdue.length}`,
+    `${E.orange} Expiring <=7d: ${m.expiring.length}`,
   ];
   if (m.overdue.length) {
     lines.push('', '*Top priorities:*');
     m.overdue.slice(0, 5).forEach((r) =>
-      lines.push(`• ${r.name} (${money(r.outstanding)}, ${r.daysOverdue}d overdue)`));
+      lines.push(`${E.bullet} ${r.name} (${money(r.outstanding)}, ${r.daysOverdue}d overdue)`));
   }
   lines.push('', 'Open TREVIS for full details.');
   return lines.join('\n');
@@ -111,6 +120,7 @@ function buildEmailHtml(m) {
       : '';
   const occPct = m.totalBeds ? Math.round((m.occupiedBeds / m.totalBeds) * 100) : 0;
   return `
+  <meta charset="utf-8">
   <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#222">
     <h2 style="margin:0">TREVIS Daily Portfolio Report</h2>
     <div style="color:#888;margin-bottom:16px">${todayLabel}</div>
@@ -124,8 +134,8 @@ function buildEmailHtml(m) {
       <tr><td>Accruing</td><td style="padding-left:24px"><b>${money(m.accruingPerDay)}/day</b></td></tr>
     </table>
 
-    ${section('🔴 Overdue', '#c00', m.overdue)}
-    ${section('🟠 Expiring within 7 days', '#d98000', m.expiring)}
+    ${section(`${E.red} Overdue`, '#c00', m.overdue)}
+    ${section(`${E.orange} Expiring within 7 days`, '#d98000', m.expiring)}
 
     <p style="color:#aaa;font-size:11px;margin-top:24px;border-top:1px solid #eee;padding-top:8px">
       Generated automatically by TREVIS · coverage figures match the in-app dashboard.
