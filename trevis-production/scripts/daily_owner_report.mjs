@@ -78,7 +78,7 @@ async function gatherMetrics() {
 const E = {
   house: '\u{1F3E0}', people: '\u{1F465}', bed: '\u{1F6CF}',
   money: '\u{1F4B0}', chart: '\u{1F4C8}', red: '\u{1F534}', orange: '\u{1F7E0}',
-  bullet: '•',
+  whatsapp: '\u{1F4AC}', bullet: '•',
 };
 
 /** Plain-text WhatsApp-style summary (short). */
@@ -106,8 +106,8 @@ function buildWhatsAppText(m) {
   return lines.join('\n');
 }
 
-/** HTML email body. */
-function buildEmailHtml(m) {
+/** HTML email body. waText = the WhatsApp summary, for the click-to-send button. */
+function buildEmailHtml(m, waText) {
   const row = (r, extra) =>
     `<tr><td style="padding:4px 10px">${r.name}</td><td style="padding:4px 10px;color:#666">${r.property} · ${r.room}</td><td style="padding:4px 10px;text-align:right">${extra}</td></tr>`;
   const section = (title, color, rows) =>
@@ -119,11 +119,27 @@ function buildEmailHtml(m) {
              : `${money(r.outstanding)} · ${r.daysOverdue}d overdue`)).join('')}</table>`
       : '';
   const occPct = m.totalBeds ? Math.round((m.occupiedBeds / m.totalBeds) * 100) : 0;
+
+  // Click-to-send WhatsApp button. Opens WhatsApp with the summary pre-filled to
+  // the owner's own number (OWNER_WHATSAPP); without a number, a generic share
+  // link that lets you pick any chat. One tap -> WhatsApp opens -> press send.
+  const phone = process.env.OWNER_WHATSAPP;
+  const waUrl = (phone ? `https://wa.me/${phone}` : 'https://wa.me/') + '?text=' + encodeURIComponent(waText || '');
+  const waButton = `
+    <div style="margin:18px 0">
+      <a href="${waUrl}" style="display:inline-block;background:#25D366;color:#fff;text-decoration:none;
+         font-weight:700;font-size:14px;padding:11px 20px;border-radius:8px">
+        ${E.whatsapp} Send this summary on WhatsApp
+      </a>
+      <div style="color:#aaa;font-size:11px;margin-top:6px">Opens WhatsApp with the summary pre-filled — just press send.</div>
+    </div>`;
+
   return `
   <meta charset="utf-8">
   <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#222">
     <h2 style="margin:0">TREVIS Daily Portfolio Report</h2>
     <div style="color:#888;margin-bottom:16px">${todayLabel}</div>
+    ${waButton}
 
     <h3 style="margin:14px 0 6px">Portfolio Health</h3>
     <table style="font-size:14px">
@@ -161,8 +177,8 @@ async function sendEmail(html) {
 
 async function main() {
   const m = await gatherMetrics();
-  const html = buildEmailHtml(m);
   const wa = buildWhatsAppText(m);
+  const html = buildEmailHtml(m, wa);
 
   console.log('\n=== WhatsApp summary ===\n' + wa + '\n');
   const phone = process.env.OWNER_WHATSAPP;
