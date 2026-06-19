@@ -163,15 +163,21 @@ async function sendEmail(html) {
   const apiKey = process.env.RESEND_API_KEY;
   const to = process.env.REPORT_TO_EMAIL;
   const from = process.env.REPORT_FROM_EMAIL || 'TREVIS <onboarding@resend.dev>';
+  // Optional CC (delivery canary / backup): set REPORT_CC_EMAIL to also copy
+  // someone (e.g. the developer) so a failed primary delivery is still visible.
+  const cc = process.env.REPORT_CC_EMAIL;
   if (!apiKey || !to) { console.error('Skip email: set RESEND_API_KEY and REPORT_TO_EMAIL.'); return false; }
+
+  const payload = { from, to: [to], subject: `TREVIS Daily Report — ${todayLabel}`, html };
+  if (cc) payload.cc = [cc];
 
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from, to: [to], subject: `TREVIS Daily Report — ${todayLabel}`, html }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) { console.error('Email failed:', res.status, await res.text()); return false; }
-  console.log('✅ Email sent to', to);
+  console.log('✅ Email sent to', to, cc ? `(cc ${cc})` : '');
   return true;
 }
 
