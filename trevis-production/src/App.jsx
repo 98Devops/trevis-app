@@ -10,6 +10,7 @@ import { Calendar } from "./parts/p8_calendar.jsx";
 import { SettingsPanel } from "./parts/p9_settings.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import { useCoverageStore } from "./hooks/useCoverageStore.js";
+import { debug } from "./lib/debug.js";
 
 /* ═══════════════════════════════════════════════════════════
    NAVIGATION
@@ -211,7 +212,7 @@ function AppInner() {
       });
 
       // Phase 4B.9: Invalidate coverage cache on payment (data changed)
-      console.log('[Phase4B.9] Invalidating coverage cache after payment');
+      debug('[Phase4B.9] Invalidating coverage cache after payment');
       setCoverageCache(new Map());
       setCoverageCacheTimestamp(Date.now());
 

@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { T, font, fmt } from "./p2_helpers.jsx";
+import { debug } from "../lib/debug.js";
 
 export function Calendar({ props, onStudentClick }) {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -17,7 +18,7 @@ export function Calendar({ props, onStudentClick }) {
       return { cells: [] };
     }
 
-    console.log('Calendar: Processing calendar data for', props.length, 'properties');
+    debug('Calendar: Processing calendar data for', props.length, 'properties');
 
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();

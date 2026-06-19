@@ -19,11 +19,11 @@
  */
 
 import { classifyStudent } from './statusClassifier.js';
+import { ATTENTION_COVERAGE_STATUSES, FINANCE_STATUS_FILTERS as VOCAB_FINANCE_FILTERS } from './statusVocabulary.js';
 
 // A student needs operator attention when their COVERAGE has expired, expires today,
-// or expires within the next 7 days. This is the same vocabulary the KPI strip uses
-// (CURRENT students are fine; EXCLUDED students are not ACTIVE and never appear).
-export const ATTENTION_STATUSES = ['OVERDUE', 'DUE_TODAY', 'EXPIRING_SOON'];
+// or expires within the next 7 days. Sourced from the single status vocabulary (TD-10).
+export const ATTENTION_STATUSES = ATTENTION_COVERAGE_STATUSES;
 
 /**
  * Coverage outstanding = days overdue × daily rate (NOT month cash owed).
@@ -105,7 +105,7 @@ export function buildFinanceRecords(coverageStudents) {
 }
 
 /** Coverage status filter chips for the Finances page (TD-3). */
-export const FINANCE_STATUS_FILTERS = ['ALL', 'CURRENT', 'EXPIRING_SOON', 'DUE_TODAY', 'OVERDUE'];
+export const FINANCE_STATUS_FILTERS = VOCAB_FINANCE_FILTERS;
 
 /**
  * Filter finance records by coverage status. 'ALL' returns everything.

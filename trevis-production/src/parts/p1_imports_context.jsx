@@ -4,6 +4,7 @@ import { signIn, signOut, getCurrentUser } from "../services/authService";
 import { getProperties, addRoom as addRoomSvc } from "../services/propertyService";
 import { addStudent as addStudentSvc, removeStudent as removeStudentSvc, getDataFlags } from "../services/studentService";
 import { recordPayment as recordPaymentSvc, getPaymentsByStudent } from "../services/paymentService";
+import { debug, debugTime, debugTimeEnd } from "../lib/debug.js";
 
 /* ═══════════════════════════════════════════════════════════
    AUTH CONTEXT
@@ -23,7 +24,7 @@ export function AuthProvider({ children }) {
 
     const loadProfile = async () => {
       try {
-        console.log('[Trevis] Loading user profile...');
+        debug('[Trevis] Loading user profile...');
         
         const ALLOWED_EMAILS = [
           "tfrsuperfx@gmail.com",
@@ -44,7 +45,7 @@ export function AuthProvider({ children }) {
         }
         
         const { data } = await getCurrentUser();
-        console.log('[Trevis] Profile:', data ? `${data.email} (${data.role})` : 'none');
+        debug('[Trevis] Profile:', data ? `${data.email} (${data.role})` : 'none');
         if (!cancelled) { setUser(data); setLoading(false); }
       } catch (err) {
         console.error('[Trevis] Profile load error:', err);
@@ -57,7 +58,7 @@ export function AuthProvider({ children }) {
 
     // Listen for auth changes (login/logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('[Trevis] Auth event:', event);
+      debug('[Trevis] Auth event:', event);
       if (event === 'SIGNED_OUT') {
         setUser(null);
       } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
@@ -79,14 +80,14 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     try {
-      console.log('[Trevis] Signing in:', email);
+      debug('[Trevis] Signing in:', email);
       const { data, error } = await signIn(email, password);
       if (error) {
         console.error('[Trevis] Sign in error:', error);
         return { data: null, error };
       }
       // signIn returns merged user+profile — set it directly
-      console.log('[Trevis] Sign in success:', data?.email, data?.role);
+      debug('[Trevis] Sign in success:', data?.email, data?.role);
       if (data) setUser(data);
       return { data, error: null };
     } catch (err) {
@@ -124,11 +125,11 @@ export function DataProvider({ children }) {
     const timerId = `getProperties-${Date.now()}`;
     setLoading(true);
     try {
-      console.time(`[Perf] ${timerId}`);
-      console.log('[Trevis] Fetching properties...');
+      debugTime(`[Perf] ${timerId}`);
+      debug('[Trevis] Fetching properties...');
       const { data, error: err } = await getProperties();
-      console.timeEnd(`[Perf] ${timerId}`);
-      console.log('[Trevis] Properties:', data?.length, 'error:', err?.message);
+      debugTimeEnd(`[Perf] ${timerId}`);
+      debug('[Trevis] Properties:', data?.length, 'error:', err?.message);
       if (err) { setError(err.message); }
       else { setProperties(data || []); setError(null); }
     } catch (err) {

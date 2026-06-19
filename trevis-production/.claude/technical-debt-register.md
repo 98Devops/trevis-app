@@ -210,7 +210,16 @@ Legend: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low
 - **Fix:** Pick one authority (JS `statusClassifier` is the documented one) and remove/retire the
   SQL status logic, or make the SQL view delegate to the same thresholds and test parity.
 
-## TD-10 🟡 Doc/code drift on status vocabulary
+## TD-10 ✅ RESOLVED (2026-06-18) — Status vocabulary centralized
+> New `src/services/statusVocabulary.js` is the single source of truth for both status sets:
+> LIFECYCLE_STATUS (persisted `students.status`: ACTIVE/VACATED/VACANT/CHECKED_OUT) and
+> COVERAGE_STATUS (computed: CURRENT/EXPIRING_SOON/DUE_TODAY/OVERDUE/EXCLUDED), plus
+> EXPIRING_THRESHOLD_DAYS, ATTENTION_COVERAGE_STATUSES, COVERED_STATUSES, FINANCE_STATUS_FILTERS.
+> `statusClassifier` and `dashboardAttention` now reference these constants instead of magic
+> strings; the duplicated ATTENTION_STATUSES/FINANCE_STATUS_FILTERS arrays now derive from the
+> vocabulary. Tests 191/191 (local+UTC). Original analysis below.
+
+## TD-10-orig 🟡 Doc/code drift on status vocabulary
 - **Where:** `.kiro/.../CRITICAL_BUSINESS_RULES.md` ("use CHECKED_OUT, don't use VACATED") vs code
   filtering `status != 'VACATED'` and demo data using `PAID/PARTIAL/OVERDUE` as a *status* value.
 - **Risk:** Confusion about the canonical student-status set (ACTIVE / VACATED / CHECKED_OUT) and
@@ -229,11 +238,17 @@ Legend: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low
 - **Where:** `src/parts/p8_calendar.jsx` — no coverage imports.
 - **Fix:** Surface coverage-end/next-due dates on the calendar once Lineage A is the standard.
 
-## TD-13 🟢 Build/observability hygiene
+## TD-13 ✅ RESOLVED (console logs, 2026-06-18) — Build/observability hygiene
+> All verbose `console.log`/`console.time`/`console.timeEnd` across src/ (22 calls, some leaking
+> user emails/roles) are now routed through `src/lib/debug.js` — silent in production, enabled by
+> `import.meta.env.DEV` or `localStorage.trevis_debug='1'` (toggle in any browser, no rebuild).
+> `console.error`/`console.warn` left intact (real failures must surface). Note: `build_app.cjs`
+> (root, demo-era) is unused by Vite — leave as legacy. Tests 191/191; build green. Original below.
+
+## TD-13-orig 🟢 Build/observability hygiene
 - **Where:** `build_app.cjs` legacy concatenation script (not used by Vite); heavy `console.log`
   /`console.time` instrumentation left in `p5_views`, dashboard, context.
-- **Fix:** Remove/relocate `build_app.cjs` or document it as legacy; gate verbose logs behind a
-  debug flag; route to a real logger for production observability.
+- **Fix:** gate verbose logs behind a debug flag (done); route to a real logger later if needed.
 
 ## TD-14 ✅ RESOLVED — Phase 4B.11 changes committed
 > All work is committed and pushed to `main` (tag `coverage-audit-complete`); the coverage store

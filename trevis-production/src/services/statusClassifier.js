@@ -17,6 +17,7 @@
  */
 
 import { calculateCoverage } from './rentCycleCalculator.js';
+import { LIFECYCLE_STATUS, COVERAGE_STATUS, EXPIRING_THRESHOLD_DAYS } from './statusVocabulary.js';
 
 /**
  * Classify a single student's coverage status
@@ -46,9 +47,9 @@ import { calculateCoverage } from './rentCycleCalculator.js';
  */
 export function classifyStudent(student) {
   // CRITICAL: Exclude non-ACTIVE students from operational metrics
-  if (student.status !== 'ACTIVE') {
+  if (student.status !== LIFECYCLE_STATUS.ACTIVE) {
     return {
-      status: 'EXCLUDED',
+      status: COVERAGE_STATUS.EXCLUDED,
       excludeFromMetrics: true,
       daysRemaining: null,
       daysOverdue: null,
@@ -62,7 +63,7 @@ export function classifyStudent(student) {
   // Handle missing coverage_end (no payment recorded)
   if (!student.coverage_end) {
     return {
-      status: 'OVERDUE',
+      status: COVERAGE_STATUS.OVERDUE,
       excludeFromMetrics: false,
       daysRemaining: null,
       daysOverdue: null,
@@ -76,10 +77,10 @@ export function classifyStudent(student) {
   // Calculate difference in days (positive = future, negative = past)
   const diff = Math.ceil((end - today) / (1000 * 60 * 60 * 24));
 
-  // CURRENT: More than 7 days remaining
-  if (diff > 7) {
+  // CURRENT: More than EXPIRING_THRESHOLD_DAYS remaining
+  if (diff > EXPIRING_THRESHOLD_DAYS) {
     return {
-      status: 'CURRENT',
+      status: COVERAGE_STATUS.CURRENT,
       excludeFromMetrics: false,
       daysRemaining: diff,
       daysOverdue: 0,
@@ -87,10 +88,10 @@ export function classifyStudent(student) {
     };
   }
 
-  // EXPIRING_SOON: 1-7 days remaining
+  // EXPIRING_SOON: 1..EXPIRING_THRESHOLD_DAYS remaining
   if (diff >= 1) {
     return {
-      status: 'EXPIRING_SOON',
+      status: COVERAGE_STATUS.EXPIRING_SOON,
       excludeFromMetrics: false,
       daysRemaining: diff,
       daysOverdue: 0,
@@ -101,7 +102,7 @@ export function classifyStudent(student) {
   // DUE_TODAY: Coverage ends today
   if (diff === 0) {
     return {
-      status: 'DUE_TODAY',
+      status: COVERAGE_STATUS.DUE_TODAY,
       excludeFromMetrics: false,
       daysRemaining: 0,
       daysOverdue: 0,
@@ -111,7 +112,7 @@ export function classifyStudent(student) {
 
   // OVERDUE: Coverage has expired
   return {
-    status: 'OVERDUE',
+    status: COVERAGE_STATUS.OVERDUE,
     excludeFromMetrics: false,
     daysRemaining: 0,
     daysOverdue: Math.abs(diff),

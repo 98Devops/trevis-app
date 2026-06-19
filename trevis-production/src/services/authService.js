@@ -1,4 +1,5 @@
 import { supabase, isConfigured } from '../lib/supabase';
+import { debug } from '../lib/debug.js';
 
 export async function signIn(email, password) {
   if (!isConfigured) return { data: null, error: { message: 'Supabase not configured' } };
@@ -9,7 +10,7 @@ export async function signIn(email, password) {
   // Use RPC function that bypasses RLS to get profile
   try {
     const { data: profile, error: rpcErr } = await supabase.rpc('get_my_profile');
-    console.log('[Trevis] Profile via RPC:', profile, 'error:', rpcErr);
+    debug('[Trevis] Profile via RPC:', profile, 'error:', rpcErr);
     if (profile && !rpcErr) {
       return { data: { ...data.user, ...profile }, error: null };
     }

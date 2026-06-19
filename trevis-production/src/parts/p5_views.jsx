@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { T, font, fmt, Badge, CoverageBar, Stat, Bar, Btn, DateRangeFilter, isUnassignedRecord, filterUnassignedRecords, countOccupiedBeds, getDisplayName } from "./p2_helpers.jsx";
 import { classifyStudent, getStatusBadgeConfig } from "../services/statusClassifier.js";
 import * as CoverageDB from "../services/coverageDatabaseService.js";
+import { debug } from "../lib/debug.js";
 
 /* ═══════════════════════════════════════════════════════════
    PROPERTY DETAIL VIEW
@@ -95,7 +96,7 @@ function RoomRow({ room, ac, propName, onStudentClick, isAdmin, onRemoveRoom, co
   const outstanding = expected - collected;
   
   // Phase 4B.1: Comprehensive verification logging
-  console.log(`[Phase4B.1] ${room.no}:`, {
+  debug(`[Phase4B.1] ${room.no}:`, {
     room: room.no,
     coveredCount: covered,
     overdueCount: overdue,

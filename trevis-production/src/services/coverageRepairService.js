@@ -9,6 +9,7 @@
 
 import { supabase } from '../lib/supabase.js';
 import { rebuildStudentCoverage } from './coverageDatabaseService.js';
+import { debug } from '../lib/debug.js';
 
 /**
  * Repair a single student's coverage by rebuilding from payment history
@@ -42,7 +43,7 @@ export async function repairStudentCoverage(studentId) {
  * @returns {Promise<{success: boolean, repaired: number, failed: number, errors: Array}>}
  */
 export async function repairAllStudentsCoverage() {
-  console.log('[CoverageRepair] Starting portfolio-wide coverage repair...');
+  debug('[CoverageRepair] Starting portfolio-wide coverage repair...');
 
   // Fetch all active students
   const { data: students, error: fetchErr } = await supabase
@@ -62,7 +63,7 @@ export async function repairAllStudentsCoverage() {
   }
 
   if (!students || students.length === 0) {
-    console.log('[CoverageRepair] No active students found');
+    debug('[CoverageRepair] No active students found');
     return { 
       success: true, 
       repaired: 0, 
@@ -71,7 +72,7 @@ export async function repairAllStudentsCoverage() {
     };
   }
 
-  console.log(`[CoverageRepair] Found ${students.length} active students to repair`);
+  debug(`[CoverageRepair] Found ${students.length} active students to repair`);
 
   let repaired = 0;
   let failed = 0;
@@ -82,7 +83,7 @@ export async function repairAllStudentsCoverage() {
     try {
       const coverage = await rebuildStudentCoverage(student.id);
       repaired++;
-      console.log(`[CoverageRepair] ✓ ${student.full_name} - coverage_end: ${coverage.coverage_end || 'NULL'}`);
+      debug(`[CoverageRepair] ✓ ${student.full_name} - coverage_end: ${coverage.coverage_end || 'NULL'}`);
     } catch (error) {
       failed++;
       const errorMsg = `${student.full_name}: ${error.message}`;
@@ -92,7 +93,7 @@ export async function repairAllStudentsCoverage() {
   }
 
   const success = failed === 0;
-  console.log(`[CoverageRepair] Complete: ${repaired} repaired, ${failed} failed`);
+  debug(`[CoverageRepair] Complete: ${repaired} repaired, ${failed} failed`);
 
   return { 
     success, 

@@ -5,6 +5,7 @@ import { useAuth } from "./p1_imports_context.jsx";
 import InlineEditField from "../components/InlineEditField.jsx";
 import { getAvailableRooms, getAllAvailableRooms, executeTransfer, getTransferHistory } from "../services/transferService.js";
 import { buildCoverageBreakdown } from "../services/coverageBreakdown.js";
+import { debug } from "../lib/debug.js";
 
 /* ═══════════════════════════════════════════════════════════
    LOGIN SCREEN
@@ -405,7 +406,7 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
     if (!error) {
       // Phase 4B.11: Invalidate coverage cache after payment edit
       if (setCoverageCache && setCoverageCacheTimestamp) {
-        console.log('[Phase4B.11] Invalidating coverage cache after payment edit');
+        debug('[Phase4B.11] Invalidating coverage cache after payment edit');
         setCoverageCache(new Map());
         setCoverageCacheTimestamp(Date.now());
       }
@@ -436,7 +437,7 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
       // Phase 4B.3: deletePayment now calls rebuildStudentCoverage automatically
       // Phase 4B.11: Invalidate coverage cache after payment delete
       if (setCoverageCache && setCoverageCacheTimestamp) {
-        console.log('[Phase4B.11] Invalidating coverage cache after payment delete');
+        debug('[Phase4B.11] Invalidating coverage cache after payment delete');
         setCoverageCache(new Map());
         setCoverageCacheTimestamp(Date.now());
       }
@@ -1211,11 +1212,11 @@ function TransferModal({ open, onClose, student, currentRoom, currentProperty, u
             .order('name');
           
           if (!fallbackError) {
-            console.log('Fetched properties (fallback):', fallbackData);
+            debug('Fetched properties (fallback):', fallbackData);
             setProperties(fallbackData || []);
           }
         } else {
-          console.log('Fetched properties:', data);
+          debug('Fetched properties:', data);
           setProperties(data || []);
         }
       } catch (err) {
