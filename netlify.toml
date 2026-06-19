@@ -2,8 +2,16 @@
   base    = "trevis-production"
   command = "npm run build"
   publish = "dist"
-  # Credit saver: skip the build unless files that affect the deployed site
-  # changed. `ignore` exits 0 (skip) when there are NO changes under the watched
-  # paths. Doc/SQL/script/workflow commits therefore cost ZERO Netlify deploys.
-  # (git exits 1 when diffs exist -> Netlify builds; exits 0 when none -> skip.)
-  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- src package.json package-lock.json index.html vite.config.js ../netlify.toml"
+  # Credit saver: build ONLY when files affecting the deployed site changed.
+  # Netlify's `ignore`: exit 0 = SKIP build, exit non-0 = BUILD.
+  # If we can't determine the previous commit (first run / shallow), BUILD to be safe.
+  # Paths are relative to `base` (trevis-production/): src, package*, index.html,
+  # vite config. Everything else (scripts/, supabase/, *.md, .github/) => SKIP.
+  ignore = """
+    if [ -z \"$CACHED_COMMIT_REF\" ]; then echo 'no cached ref -> build'; exit 1; fi
+    if git diff --quiet \"$CACHED_COMMIT_REF\" \"$COMMIT_REF\" -- src package.json package-lock.json index.html vite.config.js; then
+      echo 'no site-affecting changes -> SKIP'; exit 0
+    else
+      echo 'site files changed -> build'; exit 1
+    fi
+  """
