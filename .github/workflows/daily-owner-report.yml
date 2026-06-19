@@ -1,0 +1,49 @@
+# TREVIS — Daily Owner Report (Owner Intelligence System, Phase 1)
+#
+# Runs every morning, reads the portfolio through the coverage engine, and emails
+# the owner a portfolio health + overdue + expiring report (via Resend). Also
+# prints the WhatsApp click-to-send summary in the run log.
+#
+# Free: runs on GitHub Actions, NOT Netlify — zero deploys, zero credits.
+#
+# REQUIRED REPO SECRETS (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_URL          (already set for the coverage monitor)
+#   SUPABASE_SERVICE_KEY  (already set)
+#   RESEND_API_KEY        (from resend.com — free tier)
+#   REPORT_TO_EMAIL       (e.g. tfrsuperfx@gmail.com)
+# OPTIONAL:
+#   REPORT_FROM_EMAIL     (verified sender; default onboarding@resend.dev)
+#   OWNER_WHATSAPP        (e.g. 263777553271 — adds a click-to-send link to the log)
+
+name: Daily Owner Report
+
+on:
+  schedule:
+    - cron: '0 5 * * *'    # 05:00 UTC = 07:00 CAT (Zimbabwe) daily
+  workflow_dispatch: {}     # manual "Run workflow" for testing
+
+defaults:
+  run:
+    working-directory: trevis-production
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Supabase client
+        run: npm install --no-save @supabase/supabase-js
+
+      - name: Send daily owner report
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          REPORT_TO_EMAIL: ${{ secrets.REPORT_TO_EMAIL }}
+          REPORT_FROM_EMAIL: ${{ secrets.REPORT_FROM_EMAIL }}
+          OWNER_WHATSAPP: ${{ secrets.OWNER_WHATSAPP }}
+        run: node scripts/daily_owner_report.mjs
