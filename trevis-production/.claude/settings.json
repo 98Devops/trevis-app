@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx --yes shadcn@latest add button card avatar separator dropdown-menu collapsible badge sheet tooltip input skeleton scroll-area chart table sidebar --yes --overwrite)",
+      "Bash(npm run *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(npm test *)",
+      "Bash(grep -nA 25 \"^export \\(async \\)?function addStudent\\\\b\" c:/Users/Lenovo/PropNest/src/services/studentService.js)",
+      "Bash(grep -nA 25 \"^export \\(async \\)?function addRoom\\\\b\" c:/Users/Lenovo/PropNest/src/services/propertyService.js)"
+    ]
+  }
+}

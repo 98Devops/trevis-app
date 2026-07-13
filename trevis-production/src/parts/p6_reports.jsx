@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { T, font, fmt, Bar, Btn, Badge } from "./p2_helpers.jsx";
+import { useState } from "react";
+import { T, font, fmt, Bar, Btn } from "./p2_helpers.jsx";
 
 /* ═══════════════════════════════════════════════════════════
    REPORTS VIEW
@@ -34,7 +34,7 @@ export function Reports({ props, dataFlags, isAdmin, onResolveFlag, onSaveSnapsh
     totals.forEach(t => csv += `${t.name},${t.totalBeds},${t.totalBeds-t.vacantBeds},${t.vacantBeds},${t.totalBeds>0?((t.totalBeds-t.vacantBeds)/t.totalBeds*100).toFixed(1):"0"}\n`);
     const blob = new Blob([csv], { type:"text/csv" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = `Trevis_Report_${ts}.csv`; a.click();
+    a.download = `PropNest_Report_${ts}.csv`; a.click();
   };
 
   const tabs = [["income","Income Summary"],["outstanding","Outstanding"],["occupancy","Occupancy"]];

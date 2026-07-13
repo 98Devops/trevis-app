@@ -75,22 +75,36 @@ export async function repairAllStudentsCoverage() {
   debug(`[CoverageRepair] Found ${students.length} active students to repair`);
 
   let repaired = 0;
-  let failed = 0;
   const errors = [];
-
-  // Rebuild coverage for each student
-  for (const student of students) {
-    try {
-      const coverage = await rebuildStudentCoverage(student.id);
-      repaired++;
-      debug(`[CoverageRepair] ✓ ${student.full_name} - coverage_end: ${coverage.coverage_end || 'NULL'}`);
-    } catch (error) {
-      failed++;
-      const errorMsg = `${student.full_name}: ${error.message}`;
-      errors.push(errorMsg);
-      console.error(`[CoverageRepair] ✗ ${errorMsg}`);
+  // Deadlocks / lock contention are TRANSIENT (e.g. the dashboard refreshing
+  // while repair runs). A failed rebuild leaves the student unchanged, so the
+  // safe fix is to retry the failures after a short pause — up to 3 passes —
+  // instead of reporting dozens of "failed" students that would succeed a
+  // second later.
+  let queue = students;
+  for (let pass = 1; pass <= 3 && queue.length > 0; pass++) {
+    const retry = [];
+    if (pass > 1) {
+      debug(`[CoverageRepair] Retry pass ${pass}: ${queue.length} students`);
+      await new Promise((r) => setTimeout(r, 1500 * (pass - 1)));
     }
+    for (const student of queue) {
+      try {
+        const coverage = await rebuildStudentCoverage(student.id);
+        repaired++;
+        debug(`[CoverageRepair] ✓ ${student.full_name} - coverage_end: ${coverage.coverage_end || 'NULL'}`);
+      } catch (error) {
+        retry.push(student);
+        if (pass === 3) {
+          const errorMsg = `${student.full_name}: ${error.message}`;
+          errors.push(errorMsg);
+          console.error(`[CoverageRepair] ✗ ${errorMsg}`);
+        }
+      }
+    }
+    queue = retry;
   }
+  const failed = queue.length;
 
   const success = failed === 0;
   debug(`[CoverageRepair] Complete: ${repaired} repaired, ${failed} failed`);

@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+
+    /* Coexistence: .js and .ts live side by side during incremental migration */
+    "allowJs": true,
+    "checkJs": false,
+
+    /* Strictness for NEW TypeScript code (the domain types we add) */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+
+    /* Vite owns the build; tsc is type-check only */
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+
+    /* Path alias for shadcn-style imports */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "scripts"]
+}

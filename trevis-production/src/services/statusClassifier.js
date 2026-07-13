@@ -18,6 +18,7 @@
 
 import { calculateCoverage } from './rentCycleCalculator.js';
 import { LIFECYCLE_STATUS, COVERAGE_STATUS, EXPIRING_THRESHOLD_DAYS } from './statusVocabulary.js';
+import { parseLocalDate } from './dateUtil.js';
 
 /**
  * Classify a single student's coverage status
@@ -71,8 +72,19 @@ export function classifyStudent(student) {
     };
   }
 
-  const end = new Date(student.coverage_end);
-  end.setHours(0, 0, 0, 0);
+  // Read the stored calendar day back at LOCAL midnight (timezone-safe inverse of
+  // toLocalISO). `new Date(string)` would parse as UTC and drift a day in
+  // negative-offset zones — see parseLocalDate.
+  const end = parseLocalDate(student.coverage_end);
+  if (!end) {
+    return {
+      status: COVERAGE_STATUS.OVERDUE,
+      excludeFromMetrics: false,
+      daysRemaining: null,
+      daysOverdue: null,
+      displayLabel: 'No coverage recorded'
+    };
+  }
 
   // Calculate difference in days (positive = future, negative = past)
   const diff = Math.ceil((end - today) / (1000 * 60 * 60 * 24));

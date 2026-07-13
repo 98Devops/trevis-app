@@ -1,4 +1,5 @@
 import { supabase, isConfigured } from '../lib/supabase';
+import { toLocalISO } from './dateUtil.js';
 
 export async function getStudentsByProperty(propertyId) {
   if (!isConfigured) return { data: [], error: null };
@@ -65,7 +66,9 @@ export async function removeStudent(id) {
   if (!isConfigured) return { data: null, error: { message: 'Not configured' } };
   const { data, error } = await supabase
     .from('students')
-    .update({ check_out_date: new Date().toISOString().split('T')[0], status: 'VACATED' })
+    // Local calendar day, not UTC — toISOString() stamps yesterday when vacating
+    // between midnight and 02:00 CAT.
+    .update({ check_out_date: toLocalISO(new Date()), status: 'VACATED' })
     .eq('id', id)
     .select()
     .single();
@@ -75,10 +78,16 @@ export async function removeStudent(id) {
   // Phase 4C-A #8: a VACATED student is no longer ACTIVE, so the replay engine
   // (ACTIVE-only) cannot run. Clear the derived coverage cache so the table never
   // shows stale coverage for a checked-out tenant. (Ledger/payments untouched.)
-  await supabase
+  const { error: clearError } = await supabase
     .from('students')
     .update({ coverage_start: null, coverage_end: null, daily_rate: null, next_due_date: null })
     .eq('id', id);
+  if (clearError) {
+    // The vacate itself succeeded; surface the stale-cache risk like every
+    // other write path does (rebuildError pattern) instead of swallowing it.
+    console.error('[removeStudent] coverage cache clear failed:', clearError);
+    return { data, error: null, rebuildError: `Coverage cache clear failed: ${clearError.message}` };
+  }
 
   return { data, error: null };
 }

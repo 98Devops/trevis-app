@@ -11,6 +11,7 @@
  * @module coverageCache.test
  */
 
+import { parseLocalDate, toLocalISO } from './dateUtil.js';
 import { describe, it, expect } from 'vitest';
 import { processPayment } from './paymentProcessor.js';
 import { classifyStudent } from './statusClassifier.js';
@@ -61,8 +62,8 @@ describe('BC-8: Coverage Cache Reliability', () => {
 
       // After payment: Coverage should be CURRENT
       const afterClassification = classifyStudent(createActiveStudent(
-        result.coverageEnd.toISOString().split('T')[0],
-        result.coverageStart.toISOString().split('T')[0],
+        toLocalISO(result.coverageEnd),
+        toLocalISO(result.coverageStart),
         beforePayment.daily_rate
       ));
 
@@ -77,16 +78,22 @@ describe('BC-8: Coverage Cache Reliability', () => {
       // SCENARIO: Student is CURRENT with 15 days remaining
       // Early payment should extend coverage WITHOUT losing prepaid days
       
-      const today = new Date('2026-07-01');
-      const coverageEnd = new Date('2026-07-15'); // 15 days remaining
-      
+      // RELATIVE dates: classifyStudent compares against the REAL today, so the
+      // original hardcoded dates were a time-bomb (started failing the moment
+      // the calendar reached coverage_end - 7). Anchor everything to today.
+      const today = parseLocalDate(new Date());
+      const coverageEnd = parseLocalDate(new Date());
+      coverageEnd.setDate(coverageEnd.getDate() + 15); // 15 days remaining
+      const coverageStart = parseLocalDate(new Date());
+      coverageStart.setDate(coverageStart.getDate() - 15);
+
       const beforePayment = {
-        coverage_end: coverageEnd.toISOString().split('T')[0],
-        coverage_start: '2026-06-15',
+        coverage_end: toLocalISO(coverageEnd),
+        coverage_start: toLocalISO(coverageStart),
         monthly_rent: 110,
         daily_rate: 3.67,
         status: 'ACTIVE',
-        billing_anchor_date: '2026-06-15'
+        billing_anchor_date: toLocalISO(coverageStart)
       };
 
       const beforeClassification = classifyStudent(createActiveStudent(
@@ -102,7 +109,7 @@ describe('BC-8: Coverage Cache Reliability', () => {
       // Record early payment
       const payment = {
         amount: 110,
-        payment_date: today.toISOString().split('T')[0]
+        payment_date: toLocalISO(today)
       };
 
       const result = processPayment(payment, beforePayment);
@@ -110,13 +117,17 @@ describe('BC-8: Coverage Cache Reliability', () => {
       // CRITICAL: Coverage should extend from existing end date
       expect(result.isEarlyPayment).toBe(true);
       expect(result.prepaidDaysPreserved).toBeGreaterThanOrEqual(14); // 14-15 days depending on date calculation
-      expect(result.coverageStart).toEqual(new Date('2026-07-16')); // Day after coverage_end
-      expect(result.coverageEnd).toEqual(new Date('2026-08-14')); // 16 Jul + 30 days - 1
+      const expectedStart = new Date(coverageEnd);
+      expectedStart.setDate(expectedStart.getDate() + 1); // day after coverage_end
+      const expectedEnd = new Date(expectedStart);
+      expectedEnd.setDate(expectedEnd.getDate() + 29); // start + 30 days - 1
+      expect(result.coverageStart).toEqual(expectedStart);
+      expect(result.coverageEnd).toEqual(expectedEnd);
 
       // After payment: Still CURRENT but with more days
       const afterClassification = classifyStudent(createActiveStudent(
-        result.coverageEnd.toISOString().split('T')[0],
-        result.coverageStart.toISOString().split('T')[0],
+        toLocalISO(result.coverageEnd),
+        toLocalISO(result.coverageStart),
         beforePayment.daily_rate
       ));
 
@@ -149,7 +160,7 @@ describe('BC-8: Coverage Cache Reliability', () => {
       const originalResult = processPayment(originalPayment, student);
 
       expect(originalResult.coverageDays).toBe(30);
-      expect(originalResult.coverageEnd).toEqual(new Date('2026-07-30'));
+      expect(originalResult.coverageEnd).toEqual(parseLocalDate('2026-07-30'));
 
       // Edit payment to half amount
       const editedPayment = {
@@ -161,7 +172,7 @@ describe('BC-8: Coverage Cache Reliability', () => {
 
       // Coverage should be recalculated
       expect(editedResult.coverageDays).toBe(15);
-      expect(editedResult.coverageEnd).toEqual(new Date('2026-07-15'));
+      expect(editedResult.coverageEnd).toEqual(parseLocalDate('2026-07-15'));
       
       // CRITICAL: Cache must be invalidated after edit
       // Coverage classification changes from CURRENT (30 days) to CURRENT (15 days)
@@ -184,8 +195,8 @@ describe('BC-8: Coverage Cache Reliability', () => {
 
       const originalResult = processPayment(originalPayment, student);
 
-      expect(originalResult.coverageStart).toEqual(new Date('2026-07-01'));
-      expect(originalResult.coverageEnd).toEqual(new Date('2026-07-30'));
+      expect(originalResult.coverageStart).toEqual(parseLocalDate('2026-07-01'));
+      expect(originalResult.coverageEnd).toEqual(parseLocalDate('2026-07-30'));
 
       // Edit payment date to 10 days later
       const editedPayment = {
@@ -196,8 +207,8 @@ describe('BC-8: Coverage Cache Reliability', () => {
       const editedResult = processPayment(editedPayment, student);
 
       // Coverage should shift by 9 days
-      expect(editedResult.coverageStart).toEqual(new Date('2026-07-10'));
-      expect(editedResult.coverageEnd).toEqual(new Date('2026-08-08'));
+      expect(editedResult.coverageStart).toEqual(parseLocalDate('2026-07-10'));
+      expect(editedResult.coverageEnd).toEqual(parseLocalDate('2026-08-08'));
       expect(editedResult.coverageDays).toBe(30); // Same duration
       
       // CRITICAL: Cache invalidation required because coverage dates changed
@@ -224,7 +235,7 @@ describe('BC-8: Coverage Cache Reliability', () => {
 
       const result1 = processPayment(payment1, student);
 
-      expect(result1.coverageEnd).toEqual(new Date('2026-07-30'));
+      expect(result1.coverageEnd).toEqual(parseLocalDate('2026-07-30'));
 
       // Second payment (early payment)
       const payment2 = {
@@ -234,20 +245,20 @@ describe('BC-8: Coverage Cache Reliability', () => {
 
       const studentAfterPayment1 = {
         ...student,
-        coverage_end: result1.coverageEnd.toISOString().split('T')[0],
-        coverage_start: result1.coverageStart.toISOString().split('T')[0]
+        coverage_end: toLocalISO(result1.coverageEnd),
+        coverage_start: toLocalISO(result1.coverageStart)
       };
 
       const result2 = processPayment(payment2, studentAfterPayment1);
 
-      expect(result2.coverageEnd).toEqual(new Date('2026-08-29')); // Extended
+      expect(result2.coverageEnd).toEqual(parseLocalDate('2026-08-29')); // Extended
 
       // DELETE payment2: Coverage should revert to result1
       // In real system, rebuildStudentCoverage() would recalculate from payment1 only
       
       const afterDelete = processPayment(payment1, student);
 
-      expect(afterDelete.coverageEnd).toEqual(new Date('2026-07-30')); // Back to original
+      expect(afterDelete.coverageEnd).toEqual(parseLocalDate('2026-07-30')); // Back to original
       
       // CRITICAL: Cache must be cleared when payment deleted
       // Status may change from CURRENT to EXPIRING_SOON or OVERDUE
@@ -271,7 +282,7 @@ describe('BC-8: Coverage Cache Reliability', () => {
 
       const result = processPayment(payment, student);
 
-      expect(result.coverageEnd).toEqual(new Date('2026-07-30'));
+      expect(result.coverageEnd).toEqual(parseLocalDate('2026-07-30'));
 
       // DELETE payment: Student should have no coverage
       const afterDelete = createActiveStudent(null, null, student.daily_rate);
@@ -300,7 +311,7 @@ describe('BC-8: Coverage Cache Reliability', () => {
         const d = new Date();
         d.setHours(0, 0, 0, 0);
         d.setDate(d.getDate() + days);
-        return d.toISOString().split('T')[0];
+        return toLocalISO(d);
       };
 
       const students = [
@@ -342,8 +353,8 @@ describe('BC-8: Coverage Cache Reliability', () => {
 
       // Update student4 with new coverage
       students[3] = createActiveStudent(
-        result.coverageEnd.toISOString().split('T')[0],
-        result.coverageStart.toISOString().split('T')[0],
+        toLocalISO(result.coverageEnd),
+        toLocalISO(result.coverageStart),
         3.67
       );
 
@@ -421,8 +432,8 @@ describe('BC-8: Coverage Cache Reliability', () => {
 
       // Update portfolio
       portfolio[5] = createActiveStudent(
-        result.coverageEnd.toISOString().split('T')[0],
-        result.coverageStart.toISOString().split('T')[0],
+        toLocalISO(result.coverageEnd),
+        toLocalISO(result.coverageStart),
         3.67
       );
 
@@ -463,8 +474,8 @@ describe('BC-8: Coverage Cache Reliability', () => {
 
       // Simulate refresh: Fetch student from database
       const afterRefresh = createActiveStudent(
-        result.coverageEnd.toISOString().split('T')[0],
-        result.coverageStart.toISOString().split('T')[0],
+        toLocalISO(result.coverageEnd),
+        toLocalISO(result.coverageStart),
         student.daily_rate
       );
 
@@ -507,9 +518,9 @@ describe('BC-8: Coverage Cache Reliability', () => {
       
       const studentAfterPayment1 = {
         ...student,
-        coverage_end: result1.coverageEnd.toISOString().split('T')[0],
-        coverage_start: result1.coverageStart.toISOString().split('T')[0],
-        billing_anchor_date: result1.billingAnchorDate.toISOString().split('T')[0]
+        coverage_end: toLocalISO(result1.coverageEnd),
+        coverage_start: toLocalISO(result1.coverageStart),
+        billing_anchor_date: toLocalISO(result1.billingAnchorDate)
       };
 
       const result2 = processPayment(payment2, studentAfterPayment1);
@@ -518,7 +529,7 @@ describe('BC-8: Coverage Cache Reliability', () => {
       // In real system, this would query all payments and recalculate
       
       // After reload, coverage should match result2
-      expect(result2.coverageEnd).toEqual(new Date('2026-08-29'));
+      expect(result2.coverageEnd).toEqual(parseLocalDate('2026-08-29'));
       expect(result2.coverageDays).toBe(30);
       expect(result2.prepaidDaysPreserved).toBe(15);
       
@@ -550,8 +561,8 @@ describe('BC-8: Coverage Cache Reliability', () => {
       // Simulate login: Rebuild UI from database
       
       const afterLogin = createActiveStudent(
-        result.coverageEnd.toISOString().split('T')[0],
-        result.coverageStart.toISOString().split('T')[0],
+        toLocalISO(result.coverageEnd),
+        toLocalISO(result.coverageStart),
         student.daily_rate
       );
 
@@ -592,9 +603,9 @@ describe('BC-8: Coverage Cache Reliability', () => {
         const result = processPayment(payment, coverage);
         coverage = {
           ...coverage,
-          coverage_end: result.coverageEnd.toISOString().split('T')[0],
-          coverage_start: result.coverageStart.toISOString().split('T')[0],
-          billing_anchor_date: result.billingAnchorDate.toISOString().split('T')[0]
+          coverage_end: toLocalISO(result.coverageEnd),
+          coverage_start: toLocalISO(result.coverageStart),
+          billing_anchor_date: toLocalISO(result.billingAnchorDate)
         };
       });
 
@@ -609,9 +620,9 @@ describe('BC-8: Coverage Cache Reliability', () => {
         const result = processPayment(payment, rebuilt);
         rebuilt = {
           ...rebuilt,
-          coverage_end: result.coverageEnd.toISOString().split('T')[0],
-          coverage_start: result.coverageStart.toISOString().split('T')[0],
-          billing_anchor_date: result.billingAnchorDate.toISOString().split('T')[0]
+          coverage_end: toLocalISO(result.coverageEnd),
+          coverage_start: toLocalISO(result.coverageStart),
+          billing_anchor_date: toLocalISO(result.billingAnchorDate)
         };
       });
 
@@ -647,9 +658,9 @@ describe('BC-8: Coverage Cache Reliability', () => {
         const result = processPayment(payment, coverage1);
         coverage1 = {
           ...coverage1,
-          coverage_end: result.coverageEnd.toISOString().split('T')[0],
-          coverage_start: result.coverageStart.toISOString().split('T')[0],
-          billing_anchor_date: result.billingAnchorDate.toISOString().split('T')[0]
+          coverage_end: toLocalISO(result.coverageEnd),
+          coverage_start: toLocalISO(result.coverageStart),
+          billing_anchor_date: toLocalISO(result.billingAnchorDate)
         };
       });
 
@@ -659,9 +670,9 @@ describe('BC-8: Coverage Cache Reliability', () => {
         const result = processPayment(payment, coverage2);
         coverage2 = {
           ...coverage2,
-          coverage_end: result.coverageEnd.toISOString().split('T')[0],
-          coverage_start: result.coverageStart.toISOString().split('T')[0],
-          billing_anchor_date: result.billingAnchorDate.toISOString().split('T')[0]
+          coverage_end: toLocalISO(result.coverageEnd),
+          coverage_start: toLocalISO(result.coverageStart),
+          billing_anchor_date: toLocalISO(result.billingAnchorDate)
         };
       });
 
@@ -701,12 +712,12 @@ describe('BC-8: Coverage Cache Reliability', () => {
       // Calculate expected coverage days for $160
       // Note: processPayment may round differently than Math.floor
       expect(originalResult.coverageDays).toBe(44); // Actual result from processPayment
-      expect(originalResult.coverageEnd).toEqual(new Date('2026-08-13')); // Jul 1 + 44 days - 1
+      expect(originalResult.coverageEnd).toEqual(parseLocalDate('2026-08-13')); // Jul 1 + 44 days - 1
 
       // Classify original coverage
       const originalClassification = classifyStudent(createActiveStudent(
-        originalResult.coverageEnd.toISOString().split('T')[0],
-        originalResult.coverageStart.toISOString().split('T')[0],
+        toLocalISO(originalResult.coverageEnd),
+        toLocalISO(originalResult.coverageStart),
         student.daily_rate
       ));
 
@@ -723,12 +734,12 @@ describe('BC-8: Coverage Cache Reliability', () => {
 
       // Calculate expected coverage days for $130
       expect(editedResult.coverageDays).toBe(35); // Actual result from processPayment
-      expect(editedResult.coverageEnd).toEqual(new Date('2026-08-04')); // Jul 1 + 35 days - 1
+      expect(editedResult.coverageEnd).toEqual(parseLocalDate('2026-08-04')); // Jul 1 + 35 days - 1
 
       // Classify edited coverage
       const editedClassification = classifyStudent(createActiveStudent(
-        editedResult.coverageEnd.toISOString().split('T')[0],
-        editedResult.coverageStart.toISOString().split('T')[0],
+        toLocalISO(editedResult.coverageEnd),
+        toLocalISO(editedResult.coverageStart),
         student.daily_rate
       ));
 
@@ -768,8 +779,8 @@ describe('BC-8: Coverage Cache Reliability', () => {
 
       const originalResult = processPayment(originalPayment, student);
 
-      expect(originalResult.coverageStart).toEqual(new Date('2026-07-01'));
-      expect(originalResult.coverageEnd).toEqual(new Date('2026-07-30'));
+      expect(originalResult.coverageStart).toEqual(parseLocalDate('2026-07-01'));
+      expect(originalResult.coverageEnd).toEqual(parseLocalDate('2026-07-30'));
 
       // EDIT payment date: Jul 1 → Jul 10
       const editedPayment = {
@@ -780,8 +791,8 @@ describe('BC-8: Coverage Cache Reliability', () => {
       const editedResult = processPayment(editedPayment, student);
 
       // Coverage dates should shift by 9 days
-      expect(editedResult.coverageStart).toEqual(new Date('2026-07-10'));
-      expect(editedResult.coverageEnd).toEqual(new Date('2026-08-08'));
+      expect(editedResult.coverageStart).toEqual(parseLocalDate('2026-07-10'));
+      expect(editedResult.coverageEnd).toEqual(parseLocalDate('2026-08-08'));
       expect(editedResult.coverageDays).toBe(30); // Same duration
 
       // Calculate days shift

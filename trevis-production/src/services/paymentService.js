@@ -1,4 +1,5 @@
 import { supabase, isConfigured } from '../lib/supabase';
+import { reportError } from '../lib/sentry.js';
 
 export async function getPaymentsByStudent(studentId) {
   if (!isConfigured) return { data: [], error: null };
@@ -27,7 +28,19 @@ export async function recordPayment({ studentId, amount, paymentDate, paymentMet
     })
     .select()
     .single();
-  return { data, error };
+
+  if (error) {
+    return { data, error };
+  }
+
+  // DERIVED-CACHE CONTRACT: a payment insert mutates a truth input, so coverage
+  // MUST be rebuilt — identical to updatePayment/deletePayment. The richer
+  // recordPaymentWithCoverage path is what the UI uses today; this guard makes
+  // THIS writer safe too, so the API can never silently leave coverage_end stale.
+  // Surfaced (not thrown) via rebuildError, per TD-5.
+  const rebuildResult = await rebuildCoverageSafely(studentId, 'create');
+
+  return { data, error: null, rebuildError: rebuildResult.error };
 }
 
 export async function getPaymentsByPropertyMonth(propertyId, monthYear) {
@@ -104,6 +117,10 @@ async function rebuildCoverageSafely(studentId, context) {
   let lastErr = null;
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
+      // Jittered pause before the retry: an instant re-run collides with the
+      // same concurrent transaction that caused the first failure (deadlocks
+      // are time-correlated). 300–800ms de-synchronizes the two writers.
+      if (attempt > 1) await new Promise((r) => setTimeout(r, 300 + Math.random() * 500));
       await rebuildStudentCoverage(studentId);
       return { ok: true, error: null };
     } catch (rebuildErr) {
@@ -111,6 +128,10 @@ async function rebuildCoverageSafely(studentId, context) {
       console.error(`[TD-5] Coverage rebuild failed after payment ${context} (attempt ${attempt}/2):`, rebuildErr);
     }
   }
+  // Both attempts failed — this is exactly the class of silent-in-production
+  // failure Sentry exists for (no render crash, but a student now shows stale
+  // coverage). No-op unless a DSN is configured.
+  reportError(lastErr, { where: 'rebuildCoverageSafely', context, studentId });
   return { ok: false, error: lastErr };
 }
 

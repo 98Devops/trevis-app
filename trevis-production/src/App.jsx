@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { AuthProvider, useAuth, DataProvider, useData, isConfigured, addRoomSvc, addStudentSvc, removeStudentSvc, recordPaymentSvc, getPaymentsByStudent, getDataFlags, saveMonthlySnapshot, getSnapshots, generateObligations, logReport, updateRoomNotes, removeRoom } from "./parts/p1_imports_context.jsx";
-import { T, font, globalCSS, fmt, buildProps } from "./parts/p2_helpers.jsx";
-import { LoginScreen, NotConfiguredScreen, AddStudentWizard, AddRoomModal, PaymentModal, StudentProfile } from "./parts/p3_modals.jsx";
+import { useAuth, useData, isConfigured, addRoomSvc, addStudentSvc, removeStudentSvc, getDataFlags, saveMonthlySnapshot, generateObligations, removeRoom } from "./parts/p1_imports_context.jsx";
+import { T, font, globalCSS, buildProps } from "./parts/p2_helpers.jsx";
+import { LoginScreen, AddStudentWizard, AddRoomModal, PaymentModal, StudentProfile } from "./parts/p3_modals.jsx";
 import { Dashboard } from "./parts/p4_dashboard.jsx";
 import { PropertyDetail, Students } from "./parts/p5_views.jsx";
 import { Reports } from "./parts/p6_reports.jsx";
@@ -27,17 +27,17 @@ const NAV = [
    FALLBACK SEED (demo mode when Supabase not configured)
 ═══════════════════════════════════════════════════════════ */
 const DEMO_PROPS = [
-  { id:"demo-kf", name:"King Fisher", location:"Harare", rooms:[
+  { id:"demo-mc", name:"Maple Court", location:"Riverside", rooms:[
     { id:"d1",no:"Room 1",beds:4,rent:110,students:[
-      {id:"ds1",name:"Bethel Mudavanhu",paid:110,status:"PAID",date:"—",notes:"",payHistory:[]},
-      {id:"ds2",name:"Maitaishe Manatsa",paid:110,status:"PAID",date:"—",notes:"",payHistory:[]},
-      {id:"ds3",name:"Dephen Chakandinakira",paid:110,status:"PAID",date:"—",notes:"",payHistory:[]},
-      {id:"ds4",name:"Chengeto Kanyai",paid:110,status:"PAID",date:"—",notes:"",payHistory:[]},
+      {id:"ds1",name:"James Carter",paid:110,status:"PAID",date:"—",notes:"",payHistory:[]},
+      {id:"ds2",name:"Emily Brooks",paid:110,status:"PAID",date:"—",notes:"",payHistory:[]},
+      {id:"ds3",name:"Daniel Okafor",paid:110,status:"PAID",date:"—",notes:"",payHistory:[]},
+      {id:"ds4",name:"Chloe Bennett",paid:110,status:"PAID",date:"—",notes:"",payHistory:[]},
     ]},
   ], collected:440, expected:440, students:4, overdue:[], totalBeds:4, vacantBeds:0 },
-  { id:"demo-tc", name:"The Chase", location:"Harare", rooms:[], collected:0, expected:0, students:0, overdue:[], totalBeds:0, vacantBeds:0 },
-  { id:"demo-md", name:"Madden", location:"Harare", rooms:[], collected:0, expected:0, students:0, overdue:[], totalBeds:0, vacantBeds:0 },
-  { id:"demo-nh", name:"NEW HOUSE", location:"Harare", rooms:[], collected:0, expected:0, students:0, overdue:[], totalBeds:0, vacantBeds:0 },
+  { id:"demo-ow", name:"Oakwood", location:"Riverside", rooms:[], collected:0, expected:0, students:0, overdue:[], totalBeds:0, vacantBeds:0 },
+  { id:"demo-bg", name:"Birchgate", location:"Riverside", rooms:[], collected:0, expected:0, students:0, overdue:[], totalBeds:0, vacantBeds:0 },
+  { id:"demo-ch", name:"Cedar House", location:"Riverside", rooms:[], collected:0, expected:0, students:0, overdue:[], totalBeds:0, vacantBeds:0 },
 ];
 
 /* ═══════════════════════════════════════════════════════════
@@ -259,7 +259,7 @@ function AppInner() {
     }));
     const blob = new Blob([csv], { type:'text/csv' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `Trevis_${propName.replace(/\s+/g,'_')}_${ts}.csv`; a.click();
+    a.download = `PropNest_${propName.replace(/\s+/g,'_')}_${ts}.csv`; a.click();
   };
 
   const handleLogin = async (emailOrUser, password) => {
@@ -288,7 +288,7 @@ function AppInner() {
         <button onClick={()=>setSidebarOpen(o=>!o)} style={{ background:"none", border:"none", cursor:"pointer", color:T.gold, fontSize:22, padding:4 }}>
           {sidebarOpen ? "✕" : "☰"}
         </button>
-        <div style={{ fontSize:16, fontWeight:800, color:T.gold }}>Trevis</div>
+        <div style={{ fontSize:16, fontWeight:800, color:T.gold }}>PropNest</div>
         <div style={{ width:28, height:28, borderRadius:"50%", background:T.goldDim, display:"flex", alignItems:"center",
           justifyContent:"center", fontSize:11, fontWeight:700, color:T.gold, flexShrink:0 }}>{(user.email||"U")[0].toUpperCase()}</div>
       </div>
@@ -300,7 +300,7 @@ function AppInner() {
         <div className={`pn-sidebar ${sidebarOpen?"pn-sidebar-open":""}`} style={{ width:220, background:T.surface, borderRight:`1px solid ${T.border}`,
           display:"flex", flexDirection:"column", padding:"24px 0", flexShrink:0 }}>
           <div style={{ padding:"0 22px 28px" }}>
-            <div style={{ fontSize:20, fontWeight:800, color:T.gold, letterSpacing:"-0.02em" }}>Trevis</div>
+            <div style={{ fontSize:20, fontWeight:800, color:T.gold, letterSpacing:"-0.02em" }}>PropNest</div>
             <div style={{ fontSize:10, color:T.muted, textTransform:"uppercase", letterSpacing:"0.15em", marginTop:2 }}>Property Manager</div>
           </div>
           <div style={{ flex:1 }}>
@@ -520,7 +520,7 @@ function ReportDownloadModal({ props, user, onClose }) {
     })));
     const blob = new Blob([csv], { type:'text/csv' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `Trevis_Report_${ts}.csv`; a.click();
+    a.download = `PropNest_Report_${ts}.csv`; a.click();
     onClose();
   };
 
@@ -531,26 +531,26 @@ function ReportDownloadModal({ props, user, onClose }) {
     )).filter(s=>s.balance>0);
 
     const printDiv = document.createElement('div');
-    printDiv.id = 'trevis-print-report';
+    printDiv.id = 'propnest-print-report';
     printDiv.innerHTML = `
       <style>
         @media print {
-          body > *:not(#trevis-print-report) { display:none !important; }
-          #trevis-print-report { display:block !important; }
+          body > *:not(#propnest-print-report) { display:none !important; }
+          #propnest-print-report { display:block !important; }
         }
-        #trevis-print-report { font-family:Arial,sans-serif; color:#222; padding:32px; max-width:800px; margin:0 auto; }
-        #trevis-print-report h1 { font-size:22px; margin:0 0 4px; }
-        #trevis-print-report .subtitle { font-size:12px; color:#666; margin-bottom:24px; }
-        #trevis-print-report table { width:100%; border-collapse:collapse; margin:16px 0; font-size:12px; }
-        #trevis-print-report th { background:#f5f5f5; text-align:left; padding:8px 10px; border:1px solid #ddd; font-weight:600; }
-        #trevis-print-report td { padding:7px 10px; border:1px solid #ddd; }
-        #trevis-print-report tr:nth-child(even) td { background:#fafafa; }
-        #trevis-print-report .total-row td { font-weight:700; background:#f0f0f0 !important; }
-        #trevis-print-report .section { margin-top:24px; }
-        #trevis-print-report .footer { margin-top:32px; font-size:10px; color:#999; border-top:1px solid #ddd; padding-top:8px; }
+        #propnest-print-report { font-family:Arial,sans-serif; color:#222; padding:32px; max-width:800px; margin:0 auto; }
+        #propnest-print-report h1 { font-size:22px; margin:0 0 4px; }
+        #propnest-print-report .subtitle { font-size:12px; color:#666; margin-bottom:24px; }
+        #propnest-print-report table { width:100%; border-collapse:collapse; margin:16px 0; font-size:12px; }
+        #propnest-print-report th { background:#f5f5f5; text-align:left; padding:8px 10px; border:1px solid #ddd; font-weight:600; }
+        #propnest-print-report td { padding:7px 10px; border:1px solid #ddd; }
+        #propnest-print-report tr:nth-child(even) td { background:#fafafa; }
+        #propnest-print-report .total-row td { font-weight:700; background:#f0f0f0 !important; }
+        #propnest-print-report .section { margin-top:24px; }
+        #propnest-print-report .footer { margin-top:32px; font-size:10px; color:#999; border-top:1px solid #ddd; padding-top:8px; }
       </style>
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div><h1>Trevis</h1><div class="subtitle">Monthly Report — ${monthLabel}</div></div>
+        <div><h1>PropNest</h1><div class="subtitle">Monthly Report — ${monthLabel}</div></div>
         <div style="text-align:right;font-size:11px;color:#666">Generated: ${now.toLocaleString()}</div>
       </div>
       <table>
@@ -567,7 +567,7 @@ function ReportDownloadModal({ props, user, onClose }) {
         <table><thead><tr><th>Student</th><th>Property</th><th>Room</th><th>Balance</th></tr></thead>
         <tbody>${outstanding.map(s=>`<tr><td>${s.name}</td><td>${s.property}</td><td>${s.room}</td><td>$${s.balance.toLocaleString()}</td></tr>`).join('')}</tbody></table></div>
       ` : '<div class="section"><p>✓ No outstanding balances</p></div>'}
-      <div class="footer">Generated by Trevis Property Manager</div>
+      <div class="footer">Generated by PropNest</div>
     `;
     document.body.appendChild(printDiv);
     window.print();
@@ -617,11 +617,8 @@ function ReportDownloadModal({ props, user, onClose }) {
    ROOT APP — wrapped with providers
 ═══════════════════════════════════════════════════════════ */
 export default function App() {
-  return (
-    <AuthProvider>
-      <DataProvider>
-        <AppInner />
-      </DataProvider>
-    </AuthProvider>
-  );
+  // Providers are now hoisted to src/main.jsx. The new PropNest shell is the
+  // default; this legacy App is reachable via /?legacy=1 as a fallback for
+  // features not yet fused (inline edits, payment edit/delete, etc.).
+  return <AppInner />;
 }

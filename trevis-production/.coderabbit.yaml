@@ -1,0 +1,45 @@
+# CodeRabbit configuration — AI review on every PR.
+# Install the CodeRabbit GitHub App on the 98Devops/PropNest repo to activate.
+# https://docs.coderabbit.ai/getting-started/configure-coderabbit
+language: en-US
+
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+
+  # Focus areas for this codebase.
+  path_instructions:
+    - path: "src/services/**"
+      instructions: >-
+        This is the coverage billing engine — the single source of truth. Be
+        strict about correctness: timezone-safe date handling (toLocalISO /
+        parseLocalDate, never new Date('YYYY-MM-DD') for stored coverage days),
+        the derived-cache contract (any mutation of payments/rent/room/status
+        must rebuild coverage), and that no new/duplicate billing math is
+        introduced. Flag any change to engine logic loudly.
+    - path: "src/components/**"
+      instructions: >-
+        UI is a presenter over the engine — it must not re-derive billing math.
+        Check that screens read shared coverage (usePortfolioCoverage /
+        usePortfolioAttention) rather than inventing a second definition of a
+        metric. Watch for missing loading/empty/error states and a11y on
+        interactive elements.
+
+  auto_review:
+    enabled: true
+    drafts: false
+
+  # Don't spend review budget on generated / vendored / archived files.
+  path_filters:
+    - "!dist/**"
+    - "!**/*.lock"
+    - "!package-lock.json"
+    - "!src/components/ui/**"
+    - "!supabase/_archive/**"
+
+chat:
+  auto_reply: true

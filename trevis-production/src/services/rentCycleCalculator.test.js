@@ -8,6 +8,7 @@
  * - Next due date calculation
  */
 
+import { parseLocalDate } from './dateUtil.js';
 import { describe, it, expect } from 'vitest';
 import * as RentCycleCalculator from './rentCycleCalculator.js';
 
@@ -60,24 +61,24 @@ describe('RentCycleCalculator', () => {
     it('should calculate correct coverage period for 30 days', () => {
       const result = RentCycleCalculator.calculateCoveragePeriod('2026-06-15', 30);
       
-      expect(result.coverageStart).toEqual(new Date('2026-06-15'));
-      expect(result.coverageEnd).toEqual(new Date('2026-07-14')); // 15 Jun + 30 days - 1 = 14 Jul
+      expect(result.coverageStart).toEqual(parseLocalDate('2026-06-15'));
+      expect(result.coverageEnd).toEqual(parseLocalDate('2026-07-14')); // 15 Jun + 30 days - 1 = 14 Jul
       expect(result.coverageDays).toBe(30);
     });
 
     it('should calculate correct coverage period for 15 days', () => {
       const result = RentCycleCalculator.calculateCoveragePeriod('2026-06-15', 15);
       
-      expect(result.coverageStart).toEqual(new Date('2026-06-15'));
-      expect(result.coverageEnd).toEqual(new Date('2026-06-29')); // 15 Jun + 15 days - 1 = 29 Jun
+      expect(result.coverageStart).toEqual(parseLocalDate('2026-06-15'));
+      expect(result.coverageEnd).toEqual(parseLocalDate('2026-06-29')); // 15 Jun + 15 days - 1 = 29 Jun
       expect(result.coverageDays).toBe(15);
     });
 
     it('should handle Date objects as input', () => {
       const result = RentCycleCalculator.calculateCoveragePeriod(new Date('2026-06-15'), 30);
       
-      expect(result.coverageStart).toEqual(new Date('2026-06-15'));
-      expect(result.coverageEnd).toEqual(new Date('2026-07-14'));
+      expect(result.coverageStart).toEqual(parseLocalDate('2026-06-15'));
+      expect(result.coverageEnd).toEqual(parseLocalDate('2026-07-14'));
     });
 
     it('should throw error for invalid date', () => {
@@ -98,14 +99,14 @@ describe('RentCycleCalculator', () => {
       const result = RentCycleCalculator.calculateNextDueDate('2026-07-14', 15);
       
       // Coverage ends 14 Jul, day after is 15 Jul, anchor is 15th, so next due is 15 Jul (same month)
-      expect(result).toEqual(new Date('2026-07-15'));
+      expect(result).toEqual(parseLocalDate('2026-07-15'));
     });
 
     it('should move to next month if anchor day already passed', () => {
       const result = RentCycleCalculator.calculateNextDueDate('2026-07-20', 15);
       
       // Coverage ends 20 Jul, anchor is 15th (already passed), so next due is 15 Aug
-      expect(result).toEqual(new Date('2026-08-15'));
+      expect(result).toEqual(parseLocalDate('2026-08-15'));
     });
 
     it('should handle end of month scenarios', () => {

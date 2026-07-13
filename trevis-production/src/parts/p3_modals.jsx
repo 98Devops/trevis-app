@@ -3,7 +3,7 @@ import { T, font, Badge, InputField, SelectField, Btn, fmt, daysSince, daysColor
 import { supabase, isConfigured as sbConfigured } from "../lib/supabase";
 import { useAuth } from "./p1_imports_context.jsx";
 import InlineEditField from "../components/InlineEditField.jsx";
-import { getAvailableRooms, getAllAvailableRooms, executeTransfer, getTransferHistory } from "../services/transferService.js";
+import { getAvailableRooms, executeTransfer, getTransferHistory } from "../services/transferService.js";
 import { buildCoverageBreakdown } from "../services/coverageBreakdown.js";
 import { debug } from "../lib/debug.js";
 
@@ -27,8 +27,8 @@ export function LoginScreen({ onLogin, isConfigured }) {
     setErr("");
     if (!isConfigured) {
       const demoUsers = [
-        { email:"admin@trevis.co.zw", password:"admin1234", role:"ADMIN", full_name:"Admin" },
-        { email:"manager@trevis.co.zw", password:"manager1234", role:"MANAGER", full_name:"Manager" },
+        { email:"admin@propnest.app", password:"admin1234", role:"ADMIN", full_name:"Admin" },
+        { email:"manager@propnest.app", password:"manager1234", role:"MANAGER", full_name:"Manager" },
       ];
       const u = demoUsers.find(u => u.email === email && u.password === pass);
       if (u) onLogin(u);
@@ -56,7 +56,7 @@ export function LoginScreen({ onLogin, isConfigured }) {
     <div style={{ minHeight:"100vh", background:T.bg, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:font }}>
       <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:20, padding:40, width:400, animation:"fadeIn .4s ease" }}>
         <div style={{ textAlign:"center", marginBottom:32 }}>
-          <div style={{ fontSize:32, fontWeight:800, color:T.gold, letterSpacing:"-0.02em" }}>Trevis</div>
+          <div style={{ fontSize:32, fontWeight:800, color:T.gold, letterSpacing:"-0.02em" }}>PropNest</div>
           <div style={{ fontSize:11, color:T.muted, textTransform:"uppercase", letterSpacing:"0.15em", marginTop:4 }}>Property Manager</div>
         </div>
         {!isConfigured && (
@@ -85,7 +85,7 @@ export function LoginScreen({ onLogin, isConfigured }) {
           </>
         )}
         <form onSubmit={handleSubmit} style={{ display:"flex", flexDirection:"column", gap:14 }}>
-          <InputField label="Email" value={email} onChange={v=>{setEmail(v);setErr("");}} type="email" placeholder="admin@trevis.co.zw" />
+          <InputField label="Email" value={email} onChange={v=>{setEmail(v);setErr("");}} type="email" placeholder="admin@propnest.app" />
           <InputField label="Password" value={pass} onChange={v=>{setPass(v);setErr("");}} type="password" placeholder="••••••••" />
           {err && <div style={{ color:T.red, fontSize:12, background:T.redDim, padding:"8px 12px", borderRadius:8 }}>{err}</div>}
           <Btn accent={T.gold} disabled={loading} style={{ marginTop:8, width:"100%", padding:12, fontSize:14 }}>
@@ -93,7 +93,7 @@ export function LoginScreen({ onLogin, isConfigured }) {
           </Btn>
         </form>
         <div style={{ fontSize:10, color:T.muted, textAlign:"center", marginTop:20, lineHeight:1.6 }}>
-          {isConfigured ? "Staff access only — use your Trevis credentials" : "Demo: admin@trevis.co.zw / admin1234"}
+          {isConfigured ? "Staff access only — use your PropNest credentials" : "Demo: admin@propnest.app / admin1234"}
         </div>
       </div>
     </div>
@@ -110,7 +110,7 @@ export function NotConfiguredScreen() {
         <div style={{ fontSize:48, marginBottom:16 }}>🔌</div>
         <div style={{ fontSize:24, fontWeight:800, color:T.gold, marginBottom:8 }}>Connect Your Database</div>
         <div style={{ fontSize:13, color:T.muted, lineHeight:1.7, marginBottom:24 }}>
-          Trevis needs a Supabase backend to run in production mode.<br/>
+          PropNest needs a Supabase backend to run in production mode.<br/>
           Add your credentials to <code style={{ color:T.amber }}>.env</code> and restart.
         </div>
         <div style={{ background:T.bg, borderRadius:10, padding:16, textAlign:"left", fontSize:12, fontFamily:"'IBM Plex Mono',monospace", color:T.subtle, lineHeight:1.8 }}>
@@ -466,17 +466,17 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
     const now = new Date();
     const monthLabel = now.toLocaleString("en-US", { month:"long", year:"numeric" });
     const printDiv = document.createElement('div');
-    printDiv.id = 'trevis-statement';
+    printDiv.id = 'propnest-statement';
     printDiv.innerHTML = `
       <style>
-        @media print { body > *:not(#trevis-statement) { display:none !important; } #trevis-statement { display:block !important; } }
-        #trevis-statement { font-family:Arial,sans-serif; color:#222; padding:32px; max-width:600px; margin:0 auto; }
-        #trevis-statement table { width:100%; border-collapse:collapse; margin:12px 0; font-size:12px; }
-        #trevis-statement th,#trevis-statement td { padding:6px 10px; border:1px solid #ddd; text-align:left; }
-        #trevis-statement th { background:#f5f5f5; font-weight:600; }
-        #trevis-statement .footer { margin-top:24px; font-size:10px; color:#999; border-top:1px solid #ddd; padding-top:8px; }
+        @media print { body > *:not(#propnest-statement) { display:none !important; } #propnest-statement { display:block !important; } }
+        #propnest-statement { font-family:Arial,sans-serif; color:#222; padding:32px; max-width:600px; margin:0 auto; }
+        #propnest-statement table { width:100%; border-collapse:collapse; margin:12px 0; font-size:12px; }
+        #propnest-statement th,#propnest-statement td { padding:6px 10px; border:1px solid #ddd; text-align:left; }
+        #propnest-statement th { background:#f5f5f5; font-weight:600; }
+        #propnest-statement .footer { margin-top:24px; font-size:10px; color:#999; border-top:1px solid #ddd; padding-top:8px; }
       </style>
-      <h2 style="margin:0 0 4px">Trevis Property Management</h2>
+      <h2 style="margin:0 0 4px">PropNest Property Management</h2>
       <div style="font-size:12px;color:#666;margin-bottom:20px">Tenant Statement — ${monthLabel}</div>
       <table><tbody>
         <tr><th>Tenant</th><td>${student.name}</td></tr>
@@ -493,7 +493,7 @@ export function StudentProfile({ student, room, propName, onClose, onRecordPay, 
         <table><thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Receipt</th></tr></thead>
         <tbody>${student.payHistory.map(p=>`<tr><td>${p.date}</td><td>$${p.amount}</td><td>${p.method}</td><td>${p.receipt||'—'}</td></tr>`).join('')}</tbody></table>
       ` : ''}
-      <div class="footer">Generated ${now.toLocaleString()} — Trevis Property Manager</div>
+      <div class="footer">Generated ${now.toLocaleString()} — PropNest</div>
     `;
     document.body.appendChild(printDiv);
     window.print();

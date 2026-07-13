@@ -308,7 +308,7 @@ export function buildProps(rawProperties) {
     });
 
     const vacantBeds = Math.max(0, totalBeds - studentCount);
-    return { id: prop.id, name: prop.name, location: prop.location || 'Harare', color: ac.accent, rooms, collected, expected, students: studentCount, overdue, totalBeds, vacantBeds };
+    return { id: prop.id, name: prop.name, location: prop.location || 'Riverside', color: ac.accent, rooms, collected, expected, students: studentCount, overdue, totalBeds, vacantBeds };
   });
 }
 

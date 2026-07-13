@@ -13,6 +13,8 @@
  * @module rentCycleCalculator
  */
 
+import { parseLocalDate } from './dateUtil.js';
+
 /**
  * Calculate payment coverage details
  * 
@@ -80,9 +82,11 @@ export function calculateCoverage(amount, monthlyRent) {
  * // Returns: { coverageStart: Date(2026-06-15), coverageEnd: Date(2026-07-14), coverageDays: 30 }
  */
 export function calculateCoveragePeriod(paymentDate, coverageDays) {
-  const coverageStart = new Date(paymentDate);
-  
-  if (isNaN(coverageStart.getTime())) {
+  // Local-day parse (see dateUtil.parseLocalDate): 'YYYY-MM-DD' via new Date()
+  // is UTC midnight — the previous LOCAL day in negative-offset timezones.
+  const coverageStart = parseLocalDate(paymentDate);
+
+  if (!coverageStart) {
     throw new Error('Invalid payment date');
   }
   
@@ -114,9 +118,9 @@ export function calculateCoveragePeriod(paymentDate, coverageDays) {
  * // Returns: Date(2026-08-15) - next occurrence of 15th after coverage ends
  */
 export function calculateNextDueDate(coverageEnd, billingAnchorDay) {
-  const endDate = new Date(coverageEnd);
-  
-  if (isNaN(endDate.getTime())) {
+  const endDate = parseLocalDate(coverageEnd);
+
+  if (!endDate) {
     throw new Error('Invalid coverage end date');
   }
   

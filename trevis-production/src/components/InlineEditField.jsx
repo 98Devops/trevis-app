@@ -148,9 +148,10 @@ export default function InlineEditField({
         return placeholder;
       case 'number':
         return typeof val === 'number' ? val.toLocaleString() : val;
-      case 'select':
+      case 'select': {
         const option = options.find(opt => opt.value === val);
         return option ? option.label : val;
+      }
       case 'textarea':
         // Replace newlines with spaces for display
         return typeof val === 'string' ? val.replace(/\\n/g, ' ').replace(/\n/g, ' ') : val;

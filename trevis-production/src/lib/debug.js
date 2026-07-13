@@ -7,7 +7,7 @@
  *
  * Enabled when:
  *   - running the dev server (import.meta.env.DEV), OR
- *   - localStorage.trevis_debug === '1'  (toggle in any browser without a rebuild)
+ *   - localStorage.propnest_debug === '1'  (toggle in any browser without a rebuild)
  *
  * console.error / console.warn are NOT gated — real failures must always surface.
  *
@@ -19,7 +19,7 @@ function debugEnabled() {
     if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV) return true;
   } catch { /* import.meta not available (e.g. node script) */ }
   try {
-    if (typeof localStorage !== 'undefined' && localStorage.getItem('trevis_debug') === '1') return true;
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('propnest_debug') === '1') return true;
   } catch { /* no localStorage (SSR/node) */ }
   return false;
 }

@@ -5,6 +5,7 @@ import { getProperties, addRoom as addRoomSvc } from "../services/propertyServic
 import { addStudent as addStudentSvc, removeStudent as removeStudentSvc, getDataFlags } from "../services/studentService";
 import { recordPayment as recordPaymentSvc, getPaymentsByStudent } from "../services/paymentService";
 import { debug, debugTime, debugTimeEnd } from "../lib/debug.js";
+import { withRetry } from "../lib/withRetry.js";
 
 /* ═══════════════════════════════════════════════════════════
    AUTH CONTEXT
@@ -24,17 +25,29 @@ export function AuthProvider({ children }) {
 
     const loadProfile = async () => {
       try {
-        debug('[Trevis] Loading user profile...');
+        debug('[PropNest] Loading user profile...');
         
+        // Staff allow-list — only these accounts may enter the UI shell.
+        // (RLS is the real data guard; this keeps the shell staff-only and
+        // blocks random Google sign-ups.) To add a staff member: add their
+        // exact login email here, rebuild, and redeploy.
+        //
+        // DEMO MODE: build with VITE_DEMO_MODE=open (the public PropNest demo,
+        // pointed at the demo database of generated tenants) and the gate is
+        // skipped — anyone may Google-sign-in and look around. NEVER set this
+        // on a build pointed at the production database.
+        const OPEN_DEMO = String(import.meta.env.VITE_DEMO_MODE || "").toLowerCase() === "open";
         const ALLOWED_EMAILS = [
-          "tfrsuperfx@gmail.com",
-          "tafiejr6@gmail.com",
-          "trevisdaradi@gmail.com"
+          "admin@propnest.app",     // demo
+          "manager@propnest.app",   // demo
+          "tfrsuperfx@gmail.com",   // owner / dev
+          "trevisdaradi@gmail.com", // Trevis (owner, ADMIN)
+          "daradit@africau.edu",    // Trevis (university email)
         ];
-        
+
         const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session) {
+
+        if (session && !OPEN_DEMO) {
           const email = session.user.email;
           if (!ALLOWED_EMAILS.includes(email)) {
             await supabase.auth.signOut();
@@ -45,10 +58,10 @@ export function AuthProvider({ children }) {
         }
         
         const { data } = await getCurrentUser();
-        debug('[Trevis] Profile:', data ? `${data.email} (${data.role})` : 'none');
+        debug('[PropNest] Profile:', data ? `${data.email} (${data.role})` : 'none');
         if (!cancelled) { setUser(data); setLoading(false); }
       } catch (err) {
-        console.error('[Trevis] Profile load error:', err);
+        console.error('[PropNest] Profile load error:', err);
         if (!cancelled) { setUser(null); setLoading(false); }
       }
     };
@@ -58,7 +71,7 @@ export function AuthProvider({ children }) {
 
     // Listen for auth changes (login/logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      debug('[Trevis] Auth event:', event);
+      debug('[PropNest] Auth event:', event);
       if (event === 'SIGNED_OUT') {
         setUser(null);
       } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
@@ -70,7 +83,7 @@ export function AuthProvider({ children }) {
     // Safety timeout
     const timeout = setTimeout(() => {
       if (loading) {
-        console.warn('[Trevis] Auth timed out');
+        console.warn('[PropNest] Auth timed out');
         setLoading(false);
       }
     }, 5000);
@@ -80,18 +93,18 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     try {
-      debug('[Trevis] Signing in:', email);
+      debug('[PropNest] Signing in:', email);
       const { data, error } = await signIn(email, password);
       if (error) {
-        console.error('[Trevis] Sign in error:', error);
+        console.error('[PropNest] Sign in error:', error);
         return { data: null, error };
       }
       // signIn returns merged user+profile — set it directly
-      debug('[Trevis] Sign in success:', data?.email, data?.role);
+      debug('[PropNest] Sign in success:', data?.email, data?.role);
       if (data) setUser(data);
       return { data, error: null };
     } catch (err) {
-      console.error('[Trevis] Sign in exception:', err);
+      console.error('[PropNest] Sign in exception:', err);
       return { data: null, error: { message: err.message || 'Sign in failed' } };
     }
   };
@@ -126,14 +139,16 @@ export function DataProvider({ children }) {
     setLoading(true);
     try {
       debugTime(`[Perf] ${timerId}`);
-      debug('[Trevis] Fetching properties...');
-      const { data, error: err } = await getProperties();
+      debug('[PropNest] Fetching properties...');
+      // Retry transient failures (network blip) so the dashboard self-heals
+      // instead of flashing an error on first load. Read-only — safe to retry.
+      const { data, error: err } = await withRetry(() => getProperties());
       debugTimeEnd(`[Perf] ${timerId}`);
-      debug('[Trevis] Properties:', data?.length, 'error:', err?.message);
+      debug('[PropNest] Properties:', data?.length, 'error:', err?.message);
       if (err) { setError(err.message); }
       else { setProperties(data || []); setError(null); }
     } catch (err) {
-      console.error('[Trevis] Properties fetch error:', err);
+      console.error('[PropNest] Properties fetch error:', err);
       setError(err.message);
     }
     setLoading(false);
@@ -201,11 +216,9 @@ export async function updateSetting(key, value) {
   return { error };
 }
 
-export async function updateStudent(studentId, updates) {
-  if (!isConfigured) return { error: { message: 'Not configured' } };
-  const { error } = await supabase.from('students').update(updates).eq('id', studentId);
-  return { error };
-}
+// (removed) updateStudent: an unguarded students-table write with no field
+// allow-list and no coverage rebuild. All callers use the rebuild-aware
+// studentService.updateStudent / paymentService.updateStudentField instead.
 
 export async function logReport(userId, reportMonth, reportType) {
   if (!isConfigured) return { error: null };

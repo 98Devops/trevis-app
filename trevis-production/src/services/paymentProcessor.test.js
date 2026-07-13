@@ -10,6 +10,7 @@
  * 4. ACTIVE vs non-ACTIVE student handling
  */
 
+import { parseLocalDate, toLocalISO } from './dateUtil.js';
 import { describe, it, expect } from 'vitest';
 import * as PaymentProcessor from './paymentProcessor.js';
 
@@ -30,12 +31,12 @@ describe('PaymentProcessor', () => {
 
       const result = PaymentProcessor.processPayment(payment, student);
 
-      expect(result.coverageStart).toEqual(new Date('2026-06-15'));
-      expect(result.coverageEnd).toEqual(new Date('2026-07-14')); // 15 Jun + 30 days - 1
+      expect(result.coverageStart).toEqual(parseLocalDate('2026-06-15'));
+      expect(result.coverageEnd).toEqual(parseLocalDate('2026-07-14')); // 15 Jun + 30 days - 1
       expect(result.coverageDays).toBe(30);
       expect(result.isEarlyPayment).toBe(false);
       expect(result.prepaidDaysPreserved).toBe(0);
-      expect(result.billingAnchorDate).toEqual(new Date('2026-06-15'));
+      expect(result.billingAnchorDate).toEqual(parseLocalDate('2026-06-15'));
     });
 
     it('should process payment after coverage expires', () => {
@@ -53,8 +54,8 @@ describe('PaymentProcessor', () => {
 
       const result = PaymentProcessor.processPayment(payment, student);
 
-      expect(result.coverageStart).toEqual(new Date('2026-07-20')); // Starts from payment date
-      expect(result.coverageEnd).toEqual(new Date('2026-08-18')); // 20 Jul + 30 days - 1
+      expect(result.coverageStart).toEqual(parseLocalDate('2026-07-20')); // Starts from payment date
+      expect(result.coverageEnd).toEqual(parseLocalDate('2026-08-18')); // 20 Jul + 30 days - 1
       expect(result.isEarlyPayment).toBe(false);
       expect(result.prepaidDaysPreserved).toBe(0);
     });
@@ -77,11 +78,11 @@ describe('PaymentProcessor', () => {
       const result = PaymentProcessor.processPayment(payment, student);
 
       // CRITICAL: Coverage should start AFTER existing coverage ends
-      expect(result.coverageStart).toEqual(new Date('2026-06-26')); // Day after existing coverage ends
-      expect(result.coverageEnd).toEqual(new Date('2026-07-25')); // 26 Jun + 30 days - 1
+      expect(result.coverageStart).toEqual(parseLocalDate('2026-06-26')); // Day after existing coverage ends
+      expect(result.coverageEnd).toEqual(parseLocalDate('2026-07-25')); // 26 Jun + 30 days - 1
       expect(result.isEarlyPayment).toBe(true);
       expect(result.prepaidDaysPreserved).toBe(10); // Days between 15 Jun and 25 Jun
-      expect(result.billingAnchorDate).toEqual(new Date('2026-06-01')); // Preserved existing anchor
+      expect(result.billingAnchorDate).toEqual(parseLocalDate('2026-06-01')); // Preserved existing anchor
     });
 
     it('should handle early payment with large prepaid balance', () => {
@@ -100,8 +101,8 @@ describe('PaymentProcessor', () => {
       const result = PaymentProcessor.processPayment(payment, student);
 
       // Should extend from existing coverage end
-      expect(result.coverageStart).toEqual(new Date('2026-07-31')); // Day after 30 Jul
-      expect(result.coverageEnd).toEqual(new Date('2026-09-28')); // 31 Jul + 60 days - 1
+      expect(result.coverageStart).toEqual(parseLocalDate('2026-07-31')); // Day after 30 Jul
+      expect(result.coverageEnd).toEqual(parseLocalDate('2026-09-28')); // 31 Jul + 60 days - 1
       expect(result.isEarlyPayment).toBe(true);
       expect(result.prepaidDaysPreserved).toBe(59);
     });
@@ -122,8 +123,8 @@ describe('PaymentProcessor', () => {
       const result = PaymentProcessor.processPayment(payment, student);
 
       // payment_date <= coverage_end, so it's an early payment (edge case)
-      expect(result.coverageStart).toEqual(new Date('2026-06-26')); // Day after coverage ends
-      expect(result.coverageEnd).toEqual(new Date('2026-07-25'));
+      expect(result.coverageStart).toEqual(parseLocalDate('2026-06-26')); // Day after coverage ends
+      expect(result.coverageEnd).toEqual(parseLocalDate('2026-07-25'));
       expect(result.isEarlyPayment).toBe(true);
       expect(result.prepaidDaysPreserved).toBe(0); // Same day, so 0 days preserved
     });
@@ -206,7 +207,7 @@ describe('PaymentProcessor', () => {
       futureDate.setDate(futureDate.getDate() + 10);
 
       const student = {
-        coverage_end: futureDate.toISOString().split('T')[0],
+        coverage_end: toLocalISO(futureDate),
         monthly_rent: 110,
         status: 'ACTIVE'
       };
@@ -300,8 +301,8 @@ describe('Business-Critical Edge Cases', () => {
       // - Coverage starts on 20 July (day after existing coverage)
       // - Coverage ends on 18 August (20 Jul + 30 days - 1)
       // - Prepaid days preserved: 9 days (10 Jul to 19 Jul inclusive)
-      expect(result.coverageStart).toEqual(new Date('2026-07-20')); // Day after 19 Jul
-      expect(result.coverageEnd).toEqual(new Date('2026-08-18')); // 20 Jul + 30 days - 1
+      expect(result.coverageStart).toEqual(parseLocalDate('2026-07-20')); // Day after 19 Jul
+      expect(result.coverageEnd).toEqual(parseLocalDate('2026-08-18')); // 20 Jul + 30 days - 1
       expect(result.isEarlyPayment).toBe(true);
       expect(result.prepaidDaysPreserved).toBe(9); // 10 Jul to 19 Jul = 9 days
       
@@ -330,8 +331,8 @@ describe('Business-Critical Edge Cases', () => {
       const result1 = PaymentProcessor.processPayment(payment1, student1);
 
       // After first payment: coverage until 18 Aug (19 Jul + 30 days)
-      expect(result1.coverageStart).toEqual(new Date('2026-07-20'));
-      expect(result1.coverageEnd).toEqual(new Date('2026-08-18'));
+      expect(result1.coverageStart).toEqual(parseLocalDate('2026-07-20'));
+      expect(result1.coverageEnd).toEqual(parseLocalDate('2026-08-18'));
       expect(result1.prepaidDaysPreserved).toBe(18); // 1 Jul to 19 Jul = 18 days
 
       // Second payment on 10 July (while still covered until 18 Aug)
@@ -341,7 +342,7 @@ describe('Business-Critical Edge Cases', () => {
       };
 
       const student2 = {
-        coverage_end: result1.coverageEnd.toISOString().split('T')[0], // Now covered until 18 Aug
+        coverage_end: toLocalISO(result1.coverageEnd), // Now covered until 18 Aug
         billing_anchor_date: '2026-06-20',
         monthly_rent: 110,
         status: 'ACTIVE'
@@ -350,8 +351,8 @@ describe('Business-Critical Edge Cases', () => {
       const result2 = PaymentProcessor.processPayment(payment2, student2);
 
       // After second payment: coverage extends from 19 Aug to 17 Sep
-      expect(result2.coverageStart).toEqual(new Date('2026-08-19')); // Day after 18 Aug
-      expect(result2.coverageEnd).toEqual(new Date('2026-09-17')); // 19 Aug + 30 days - 1
+      expect(result2.coverageStart).toEqual(parseLocalDate('2026-08-19')); // Day after 18 Aug
+      expect(result2.coverageEnd).toEqual(parseLocalDate('2026-09-17')); // 19 Aug + 30 days - 1
       expect(result2.isEarlyPayment).toBe(true);
       expect(result2.prepaidDaysPreserved).toBeGreaterThan(0);
 
@@ -409,7 +410,7 @@ describe('Business-Critical Edge Cases', () => {
       // NOT CURRENT (which requires coverage_end > today)
       // NOT EXPIRING_SOON (which is future dates within 7 days)
 
-      const today = new Date().toISOString().split('T')[0];
+      const today = toLocalISO(new Date());
 
       const payment = {
         amount: 110,
@@ -427,7 +428,7 @@ describe('Business-Critical Edge Cases', () => {
 
       // When payment_date === coverage_end, it's considered early payment (edge case)
       // Coverage should extend from tomorrow
-      const tomorrow = new Date(today);
+      const tomorrow = parseLocalDate(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
       expect(result.coverageStart).toEqual(tomorrow);
@@ -446,11 +447,11 @@ describe('Business-Critical Edge Cases', () => {
 
       const payment = {
         amount: 110,
-        payment_date: today.toISOString().split('T')[0]
+        payment_date: toLocalISO(today)
       };
 
       const student = {
-        coverage_end: yesterday.toISOString().split('T')[0], // Coverage ended yesterday
+        coverage_end: toLocalISO(yesterday), // Coverage ended yesterday
         billing_anchor_date: '2026-06-20',
         monthly_rent: 110,
         status: 'ACTIVE'
@@ -460,7 +461,7 @@ describe('Business-Critical Edge Cases', () => {
 
       // Coverage expired yesterday, so this is NOT an early payment
       // New coverage starts from payment date (today)
-      const expectedStart = new Date(payment.payment_date);
+      const expectedStart = parseLocalDate(payment.payment_date);
       expect(result.coverageStart).toEqual(expectedStart);
       expect(result.isEarlyPayment).toBe(false);
       expect(result.prepaidDaysPreserved).toBe(0);
@@ -494,8 +495,8 @@ describe('Business-Critical Edge Cases', () => {
       // - Coverage start = 1 July 2026
       // - Coverage end = 27 December 2026 (1 Jul + 180 days - 1)
       expect(result.coverageDays).toBe(180);
-      expect(result.coverageStart).toEqual(new Date('2026-07-01'));
-      expect(result.coverageEnd).toEqual(new Date('2026-12-27')); // 1 Jul + 180 days - 1 = 27 Dec
+      expect(result.coverageStart).toEqual(parseLocalDate('2026-07-01'));
+      expect(result.coverageEnd).toEqual(parseLocalDate('2026-12-27')); // 1 Jul + 180 days - 1 = 27 Dec
       expect(result.isEarlyPayment).toBe(false);
       expect(result.prepaidDaysPreserved).toBe(0);
       
@@ -527,8 +528,8 @@ describe('Business-Critical Edge Cases', () => {
       // - New coverage ends = 26 Jan 2027 (28 Dec + 30 days - 1)
       expect(result.isEarlyPayment).toBe(true);
       expect(result.prepaidDaysPreserved).toBe(87); // 1 Oct to 27 Dec = 87 days
-      expect(result.coverageStart).toEqual(new Date('2026-12-28')); // Day after 27 Dec
-      expect(result.coverageEnd).toEqual(new Date('2027-01-26')); // 28 Dec + 30 days - 1
+      expect(result.coverageStart).toEqual(parseLocalDate('2026-12-28')); // Day after 27 Dec
+      expect(result.coverageEnd).toEqual(parseLocalDate('2027-01-26')); // 28 Dec + 30 days - 1
       expect(result.coverageDays).toBe(30); // Standard 1-month extension
       
       // Verify no days disappear

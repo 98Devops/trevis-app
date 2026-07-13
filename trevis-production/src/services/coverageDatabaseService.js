@@ -34,7 +34,8 @@
 import { supabase } from '../lib/supabase.js';
 import { processPayment } from './paymentProcessor.js';
 import { classifyPortfolio } from './statusClassifier.js';
-import { toLocalISO } from './dateUtil.js';
+import { toLocalISO, parseLocalDate } from './dateUtil.js';
+import { reportError } from '../lib/sentry.js';
 
 /**
  * Record payment and update student coverage
@@ -119,6 +120,9 @@ export async function recordPaymentWithCoverage({
   let rebuildError = null;
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
+      // Jittered pause before the retry — an instant re-run collides with the
+      // same concurrent writer that deadlocked attempt 1 (see Pass 2 note).
+      if (attempt > 1) await new Promise((r) => setTimeout(r, 300 + Math.random() * 500));
       coverage = await rebuildStudentCoverage(studentId);
       rebuildError = null;
       break;
@@ -126,6 +130,11 @@ export async function recordPaymentWithCoverage({
       rebuildError = err;
       console.error(`[TD-5] Coverage rebuild failed after payment create (attempt ${attempt}/2):`, err);
     }
+  }
+  if (rebuildError) {
+    // Payment recorded but coverage now stale — report to Sentry (no-op without
+    // a DSN) so production hears about it even if the user dismisses the toast.
+    reportError(rebuildError, { where: 'recordPaymentWithCoverage.rebuild', studentId });
   }
 
   return { payment, coverage, rebuildError };
@@ -168,12 +177,13 @@ export async function getDashboardKPIs() {
     .reduce((sum, s) => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      
-      const end = new Date(s.coverage_end);
-      end.setHours(0, 0, 0, 0);
-      
+
+      // Local-midnight read (timezone-safe, matches classifyStudent / toLocalISO).
+      const end = parseLocalDate(s.coverage_end);
+      if (!end) return sum;
+
       const daysOverdue = Math.ceil((today - end) / (1000 * 60 * 60 * 24));
-      
+
       if (daysOverdue > 0 && s.daily_rate) {
         return sum + (daysOverdue * s.daily_rate);
       }
@@ -242,6 +252,35 @@ export async function getAllStudentsCoverage() {
   }
 
   return data;
+}
+
+/**
+ * Same query as getAllStudentsCoverage(), but THROWS on failure instead of
+ * returning [] — so callers that need to distinguish "empty portfolio" from
+ * "the fetch failed" (the app-level coverage store) can show an error state
+ * rather than a dashboard of silent zeros. Legacy callers keep the [] contract.
+ */
+export async function getAllStudentsCoverageStrict() {
+  const { data, error } = await supabase
+    .from('students')
+    .select(`
+      id,
+      full_name,
+      status,
+      coverage_start,
+      coverage_end,
+      daily_rate,
+      next_due_date,
+      rooms(
+        rent_per_bed,
+        room_number,
+        properties(name, color_accent)
+      )
+    `)
+    .neq('status', 'VACATED');
+
+  if (error) throw new Error(`Coverage fetch failed: ${error.message}`);
+  return data || [];
 }
 
 /**
@@ -328,6 +367,10 @@ export async function rebuildStudentCoverage(studentId) {
   // start on every non-early payment.
   let chainCoverageStart = null;
 
+  // Pass 1 — pure, in-memory replay. Each payment's coverage depends on the prior
+  // one, so the REPLAY stays sequential, but it touches no I/O: we only collect the
+  // per-payment metadata writes to issue together afterwards.
+  const paymentUpdates = [];
   for (const payment of payments) {
     const paymentInput = {
       amount: parseFloat(payment.amount),
@@ -347,18 +390,40 @@ export async function rebuildStudentCoverage(studentId) {
     }
     currentCoverageEnd = finalResult.coverageEnd;
 
-    // Update payment record with recalculated coverage metadata.
     // toLocalISO: store the engine's LOCAL calendar day. Passing raw Date objects
     // lets the client serialize them as UTC, shifting dates by a day in non-UTC
     // zones (the 2026-06-18 timezone bug).
-    await supabase
+    paymentUpdates.push({
+      id: payment.id,
+      coverage_start_date: toLocalISO(finalResult.coverageStart),
+      coverage_end_date: toLocalISO(finalResult.coverageEnd),
+      days_covered: finalResult.coverageDays
+    });
+  }
+
+  // Pass 2 — write the per-payment coverage metadata SEQUENTIALLY in a stable
+  // (payment id) order. This was briefly Promise.all for latency, which caused
+  // real production deadlocks (Sentry, 2026-07-06): two overlapping rebuilds of
+  // the same student fire the same row updates in interleaved order, and
+  // Postgres kills one (40P01). Sequential writes in one deterministic order
+  // make that structurally impossible — both rebuilds acquire locks in the same
+  // sequence, so one simply waits for the other. Cost: one round-trip per
+  // payment (~4/student typical) — negligible next to a support call about
+  // "deadlock detected". The rebuild stays idempotent and retried by
+  // rebuildCoverageSafely, so any failure still throws and redoes the lot.
+  const orderedUpdates = [...paymentUpdates].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+  for (const u of orderedUpdates) {
+    const { error: wErr } = await supabase
       .from('payments')
       .update({
-        coverage_start_date: toLocalISO(finalResult.coverageStart),
-        coverage_end_date: toLocalISO(finalResult.coverageEnd),
-        days_covered: finalResult.coverageDays
+        coverage_start_date: u.coverage_start_date,
+        coverage_end_date: u.coverage_end_date,
+        days_covered: u.days_covered
       })
-      .eq('id', payment.id);
+      .eq('id', u.id);
+    if (wErr) {
+      throw new Error(`Coverage metadata write failed: ${wErr.message}`);
+    }
   }
 
   // 5. Update student coverage fields with final state.

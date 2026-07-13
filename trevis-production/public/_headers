@@ -1,0 +1,25 @@
+# Netlify security headers. Netlify serves files in public/ at the site root, so
+# this file ships as-is. Applies to every route of the SPA.
+#
+# CSP NOTES (a wrong CSP white-screens the app — read before editing):
+#  - script-src 'self': Vite's production build emits EXTERNAL bundled scripts
+#    (no inline JS), so no 'unsafe-inline' is needed for scripts.
+#  - style-src 'unsafe-inline': the app uses inline style={} attributes (and
+#    Tailwind), which require it. This is the one unavoidable relaxation.
+#  - connect-src: Supabase REST + Realtime (wss). Wildcard *.supabase.co works for
+#    BOTH PropNest's and Trevis's projects, so no edit needed when we repoint.
+#  - Sentry: the *.ingest.*.sentry.io entries cover the US region DSN. If your
+#    Sentry project is in the EU, add https://*.ingest.de.sentry.io.
+#
+# FIRST DEPLOY: ship a Netlify deploy preview, open the console, and confirm there
+# are NO "Content Security Policy" violations. If something is blocked, temporarily
+# rename the header to "Content-Security-Policy-Report-Only" (reports without
+# blocking), fix the directive, then switch back.
+
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Permissions-Policy: camera=(), microphone=(), geolocation=()

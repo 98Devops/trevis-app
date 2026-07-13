@@ -159,26 +159,76 @@ function buildEmailHtml(m, waText) {
   </div>`;
 }
 
+// Build the list of (API key -> recipient) send-pairs. On Resend's free tier with
+// the default sender, a key can ONLY email its own account owner — so to reach two
+// different people with no verified domain, we send once per pair, each from its
+// own Resend account:
+//   Pair 1 (you)    : RESEND_API_KEY    + REPORT_TO_EMAIL
+//   Pair 2 (Trevis) : RESEND_API_KEY_2  + REPORT_TO_EMAIL_2   (optional)
+// If the _2 secrets are absent, it simply sends the single Pair 1 email (unchanged).
+function buildSendPairs() {
+  const fromDefault = 'TREVIS <onboarding@resend.dev>';
+  const pairs = [];
+  if (process.env.RESEND_API_KEY && process.env.REPORT_TO_EMAIL) {
+    pairs.push({
+      key: process.env.RESEND_API_KEY,
+      to: process.env.REPORT_TO_EMAIL,
+      from: process.env.REPORT_FROM_EMAIL || fromDefault,
+      cc: process.env.REPORT_CC_EMAIL || null, // optional canary on pair 1 only
+    });
+  }
+  if (process.env.RESEND_API_KEY_2 && process.env.REPORT_TO_EMAIL_2) {
+    pairs.push({
+      key: process.env.RESEND_API_KEY_2,
+      to: process.env.REPORT_TO_EMAIL_2,
+      from: process.env.REPORT_FROM_EMAIL_2 || fromDefault,
+      cc: null,
+    });
+  }
+  return pairs;
+}
+
 async function sendEmail(html) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const to = process.env.REPORT_TO_EMAIL;
-  const from = process.env.REPORT_FROM_EMAIL || 'TREVIS <onboarding@resend.dev>';
-  // Optional CC (delivery canary / backup): set REPORT_CC_EMAIL to also copy
-  // someone (e.g. the developer) so a failed primary delivery is still visible.
-  const cc = process.env.REPORT_CC_EMAIL;
-  if (!apiKey || !to) { console.error('Skip email: set RESEND_API_KEY and REPORT_TO_EMAIL.'); return false; }
-
-  const payload = { from, to: [to], subject: `TREVIS Daily Report — ${todayLabel}`, html };
-  if (cc) payload.cc = [cc];
-
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) { console.error('Email failed:', res.status, await res.text()); return false; }
-  console.log('✅ Email sent to', to, cc ? `(cc ${cc})` : '');
-  return true;
+  const pairs = buildSendPairs();
+  // Config check — prints set/MISSING only (never the values), so a misnamed or
+  // unset secret is obvious in the run log.
+  const seen = (v) => (v ? 'set' : 'MISSING');
+  console.log('Config:',
+    `RESEND_API_KEY=${seen(process.env.RESEND_API_KEY)}`,
+    `REPORT_TO_EMAIL=${seen(process.env.REPORT_TO_EMAIL)}`,
+    `RESEND_API_KEY_2=${seen(process.env.RESEND_API_KEY_2)}`,
+    `REPORT_TO_EMAIL_2=${seen(process.env.REPORT_TO_EMAIL_2)}`);
+  console.log(`Preparing to send to ${pairs.length} recipient(s).`);
+  if ((process.env.RESEND_API_KEY_2 || process.env.REPORT_TO_EMAIL_2) &&
+      !(process.env.RESEND_API_KEY_2 && process.env.REPORT_TO_EMAIL_2)) {
+    console.warn('⚠️  Second recipient is half-configured: BOTH RESEND_API_KEY_2 and REPORT_TO_EMAIL_2 must be set (exact names).');
+  }
+  if (!pairs.length) {
+    console.error('Skip email: set RESEND_API_KEY and REPORT_TO_EMAIL (and optionally RESEND_API_KEY_2 / REPORT_TO_EMAIL_2 for a second recipient).');
+    return false;
+  }
+  let allOk = true;
+  for (const p of pairs) {
+    const payload = { from: p.from, to: [p.to], subject: `TREVIS Daily Report — ${todayLabel}`, html };
+    if (p.cc) payload.cc = [p.cc];
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${p.key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        console.error(`❌ Email to ${p.to} failed:`, res.status, await res.text());
+        allOk = false;
+      } else {
+        console.log('✅ Email sent to', p.to, p.cc ? `(cc ${p.cc})` : '');
+      }
+    } catch (err) {
+      console.error(`❌ Email to ${p.to} errored:`, err.message);
+      allOk = false;
+    }
+  }
+  return allOk;
 }
 
 async function main() {
@@ -191,7 +241,13 @@ async function main() {
   if (phone) console.log('Click-to-send WhatsApp:\n  https://wa.me/' + phone + '?text=' + encodeURIComponent(wa) + '\n');
 
   if (DRY) { console.log('(--dry-run: email NOT sent)'); return; }
-  await sendEmail(html);
+  const ok = await sendEmail(html);
+  if (!ok) {
+    // Turn the GitHub run RED so a rejected email is never hidden behind a
+    // green check again. The per-recipient reason is logged above.
+    console.error('One or more emails failed to send — see the errors above.');
+    process.exit(1);
+  }
 }
 
 main().catch((e) => { console.error('FATAL:', e); process.exit(1); });

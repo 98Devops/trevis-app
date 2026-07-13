@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { T, font, InputField, Btn } from "./p2_helpers.jsx";
 
 export function SettingsPanel({ onClose, isAdmin, user }) {
-  const [systemName, setSystemName] = useState("Trevis");
+  const [systemName, setSystemName] = useState("PropNest");
   const [currencySymbol, setCurrencySymbol] = useState("$");
   const [countryCode, setCountryCode] = useState("263");
   const [allowedEmails, setAllowedEmails] = useState([]);
@@ -12,16 +12,16 @@ export function SettingsPanel({ onClose, isAdmin, user }) {
 
   // Mock properties for demo
   const [properties, setProperties] = useState([
-    { id: 1, name: "King Fisher", color: "#F59E0B" },
-    { id: 2, name: "The Chase", color: "#3B82F6" },
-    { id: 3, name: "Madden", color: "#10B981" },
-    { id: 4, name: "NEW HOUSE", color: "#8B5CF6" }
+    { id: 1, name: "Maple Court", color: "#F59E0B" },
+    { id: 2, name: "Oakwood", color: "#3B82F6" },
+    { id: 3, name: "Birchgate", color: "#10B981" },
+    { id: 4, name: "Cedar House", color: "#8B5CF6" }
   ]);
 
   // Load settings on mount
   useEffect(() => {
     // In real app, load from Supabase settings table
-    setAllowedEmails(["tfrsuperfx@gmail.com", "tafiejr6@gmail.com", "trevisdaradi@gmail.com"]);
+    setAllowedEmails(["admin@propnest.app", "manager@propnest.app"]);
   }, []);
 
   const handleSaveSystem = async () => {
@@ -142,7 +142,7 @@ export function SettingsPanel({ onClose, isAdmin, user }) {
                 label="System Name" 
                 value={systemName} 
                 onChange={setSystemName} 
-                placeholder="Trevis" 
+                placeholder="PropNest" 
               />
               <InputField 
                 label="Currency Symbol" 

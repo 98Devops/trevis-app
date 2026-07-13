@@ -19,10 +19,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import * as CoverageDB from '../services/coverageDatabaseService.js';
 import { classifyStudent } from '../services/statusClassifier.js';
+import { withRetry } from '../lib/withRetry.js';
+import { reportError } from '../lib/sentry.js';
 
 export function useCoverageStore(enabled = true) {
   const [students, setStudents] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [nonce, setNonce] = useState(0);
   const cancelledRef = useRef(false);
 
@@ -32,11 +35,21 @@ export function useCoverageStore(enabled = true) {
     if (!enabled) { setLoading(false); return; }
     cancelledRef.current = false;
     setLoading(true);
-    CoverageDB.getAllStudentsCoverage()
-      .then((data) => {
-        if (!cancelledRef.current) setStudents(Array.isArray(data) ? data : []);
+    // Strict fetch + retry: a transient network blip self-heals; a real failure
+    // sets `error` (surfaced as a banner) instead of rendering a dashboard of
+    // silent zeros indistinguishable from data loss. Last good data is KEPT so
+    // an already-loaded portfolio doesn't blank out on a failed refresh.
+    withRetry(async () => ({ data: await CoverageDB.getAllStudentsCoverageStrict(), error: null }))
+      .then((res) => {
+        if (cancelledRef.current) return;
+        if (res?.error) {
+          setError(res.error.message || String(res.error));
+          reportError(res.error instanceof Error ? res.error : new Error(String(res.error)), { where: 'useCoverageStore.fetch' });
+        } else {
+          setStudents(Array.isArray(res?.data) ? res.data : []);
+          setError(null);
+        }
       })
-      .catch(() => { if (!cancelledRef.current) setStudents([]); })
       .finally(() => { if (!cancelledRef.current) setLoading(false); });
     return () => { cancelledRef.current = true; };
   }, [enabled, nonce]);
@@ -52,5 +65,5 @@ export function useCoverageStore(enabled = true) {
     return m;
   }, [students]);
 
-  return { students, coverageMap, loading, refresh };
+  return { students, coverageMap, loading, error, refresh };
 }

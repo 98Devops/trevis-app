@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getAvailableRooms, getAllAvailableRooms, executeTransfer, getTransferHistory } from './transferService';
+import { getAvailableRooms, executeTransfer, getTransferHistory } from './transferService';
 
 // Mock the supabase module
 vi.mock('../lib/supabase', () => ({

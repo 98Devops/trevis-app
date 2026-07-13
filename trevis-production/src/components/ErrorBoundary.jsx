@@ -1,4 +1,5 @@
 import { Component } from 'react';
+import { reportError } from '../lib/sentry.js';
 
 /**
  * ErrorBoundary Component
@@ -44,6 +45,10 @@ class ErrorBoundary extends Component {
       componentStack: errorInfo.componentStack,
       timestamp: new Date().toISOString()
     });
+
+    // Forward boundary-caught errors to Sentry (no-op until a DSN is configured).
+    // React swallows these, so the global handler wouldn't see them otherwise.
+    reportError(error, { componentName, componentStack: errorInfo?.componentStack });
 
     this.setState({
       errorInfo

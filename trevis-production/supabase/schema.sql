@@ -1,10 +1,17 @@
 -- ═══════════════════════════════════════════════════════════
--- TREVIS PRODUCTION DATABASE SCHEMA
+-- PropNest DATABASE SCHEMA
 -- Run this entire file in your Supabase SQL Editor
 -- ═══════════════════════════════════════════════════════════
 
 -- Enable UUID generation
 create extension if not exists "pgcrypto";
+
+-- Self-heal: the signup trigger lives on auth.users (auth schema), so a prior
+-- `drop schema public cascade` can leave it orphaned, pointing at a profiles
+-- table that no longer exists — which then blocks ALL new-user creation.
+-- Drop it up front; it is recreated (hardened) further down this file.
+drop trigger if exists trg_new_user_profile on auth.users;
+drop function if exists handle_new_user() cascade;
 
 -- ─────────────────────────────────────────────
 -- 1. PROPERTIES
@@ -49,6 +56,14 @@ create table if not exists students (
     check (status in ('ACTIVE','VACATED','SUSPENDED')),
   notes                  text,
   data_flags             text,  -- pipe-separated flag descriptions for Data Quality view
+  -- ── Coverage engine: DERIVED CACHE of (payments + room rent). ──
+  -- Written ONLY by the JS engine (rebuildStudentCoverage); never hand-authored.
+  -- Nullable: a student with no payment yet has no coverage.
+  coverage_start         date,
+  coverage_end           date,
+  daily_rate             numeric(8,2),
+  next_due_date          date,
+  billing_anchor_date    date,
   created_at             timestamptz default now(),
   created_by             uuid references auth.users(id)
 );
@@ -62,10 +77,17 @@ create table if not exists payments (
   amount         numeric(10,2) not null,
   payment_date   date not null,
   payment_method text default 'Cash'
-    check (payment_method in ('Cash','EcoCash','Bank Transfer','Zipit','Swipe')),
+    -- Superset: keeps the original Zimbabwe methods (EcoCash/Zipit/Swipe) so a
+    -- port onto Trevis's live data never rejects an existing payment, plus the
+    -- generic methods the new UI offers. Widen here (additive) rather than swap.
+    check (payment_method in ('Cash','EcoCash','Bank Transfer','Zipit','Swipe','Mobile Money','Card')),
   receipt_number text,
   month_year     text not null,  -- derived: 'YYYY-MM' format
   notes          text,
+  -- ── Per-payment coverage slice (what this payment bought). Derived cache. ──
+  coverage_start_date date,
+  coverage_end_date   date,
+  days_covered        integer,
   recorded_by    uuid references auth.users(id),
   created_at     timestamptz default now()
 );
@@ -85,6 +107,21 @@ create table if not exists monthly_obligations (
   due_date    date,
   updated_at  timestamptz default now(),
   unique(student_id, month)
+);
+
+-- ─────────────────────────────────────────────
+-- 5b. STUDENT TRANSFERS (audit trail of room changes)
+-- ─────────────────────────────────────────────
+create table if not exists student_transfers (
+  id            uuid primary key default gen_random_uuid(),
+  student_id    uuid not null references students(id) on delete cascade,
+  from_room_id  uuid not null references rooms(id),
+  to_room_id    uuid not null references rooms(id),
+  transfer_date date not null default current_date,
+  reason        text,
+  performed_by  uuid references auth.users(id),
+  created_at    timestamptz default now(),
+  constraint different_rooms check (from_room_id != to_room_id)
 );
 
 -- ─────────────────────────────────────────────
@@ -207,15 +244,27 @@ create trigger trg_new_student_obligation
   for each row execute function create_obligation_for_new_student();
 
 -- Trigger function: auto-create profile on new user signup
+-- SECURITY DEFINER + pinned search_path so it resolves `profiles` correctly and
+-- runs with the function owner's rights during auth.users insert (Supabase signup).
+-- EXCEPTION guard: a failure here must NOT block user creation in auth.users.
 create or replace function handle_new_user()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
 begin
-  insert into profiles (id, email, role)
+  insert into public.profiles (id, email, role)
   values (NEW.id, NEW.email, 'MANAGER')
   on conflict (id) do nothing;
   return NEW;
+exception
+  when others then
+    -- Never break signup; profile can be created/repaired later.
+    raise warning 'handle_new_user failed for %: %', NEW.id, SQLERRM;
+    return NEW;
 end;
-$$ language plpgsql security definer;
+$$;
 
 drop trigger if exists trg_new_user_profile on auth.users;
 create trigger trg_new_user_profile
@@ -231,46 +280,78 @@ alter table rooms               enable row level security;
 alter table students            enable row level security;
 alter table payments            enable row level security;
 alter table monthly_obligations enable row level security;
+alter table student_transfers   enable row level security;
 alter table profiles            enable row level security;
 
 -- Helper function: check if current user is admin
+-- SECURITY DEFINER + search_path so its read of `profiles` bypasses RLS (the
+-- definer owns the table and is not FORCE-RLS), preventing policy recursion.
 create or replace function is_admin()
-returns boolean as $$
+returns boolean
+language sql security definer stable
+set search_path = public
+as $$
   select exists (
     select 1 from profiles
      where id = auth.uid()
        and role = 'ADMIN'
   );
-$$ language sql security definer stable;
+$$;
 
 -- Helper function: get current user's assigned property_id
 create or replace function my_property_id()
-returns uuid as $$
+returns uuid
+language sql security definer stable
+set search_path = public
+as $$
   select property_id from profiles where id = auth.uid();
-$$ language sql security definer stable;
+$$;
+
+-- RPC: the app reads the signed-in user's profile through this (authService.js).
+-- SECURITY DEFINER so it bypasses the profiles RLS policy entirely — this is the
+-- canonical, recursion-free way to load role/property for the current user.
+create or replace function get_my_profile()
+returns table (id uuid, email text, full_name text, role text, property_id uuid)
+language sql security definer stable
+set search_path = public
+as $$
+  select p.id, p.email, p.full_name, p.role, p.property_id
+  from profiles p
+  where p.id = auth.uid();
+$$;
+
+grant execute on function is_admin()        to authenticated, anon;
+grant execute on function my_property_id()   to authenticated, anon;
+grant execute on function get_my_profile()   to authenticated, anon;
 
 -- ── PROPERTIES ──
+drop policy if exists "Admin full access to properties" on properties;
 create policy "Admin full access to properties" on properties
   for all using (is_admin());
 
+drop policy if exists "Manager can read own property" on properties;
 create policy "Manager can read own property" on properties
   for select using (
     is_admin() or id = my_property_id()
   );
 
 -- ── ROOMS ──
+drop policy if exists "Admin full access to rooms" on rooms;
 create policy "Admin full access to rooms" on rooms
   for all using (is_admin());
 
+drop policy if exists "Manager can read own property rooms" on rooms;
 create policy "Manager can read own property rooms" on rooms
   for select using (
     is_admin() or property_id = my_property_id()
   );
 
 -- ── STUDENTS ──
+drop policy if exists "Admin full access to students" on students;
 create policy "Admin full access to students" on students
   for all using (is_admin());
 
+drop policy if exists "Manager can read students in own property" on students;
 create policy "Manager can read students in own property" on students
   for select using (
     is_admin() or
@@ -280,9 +361,11 @@ create policy "Manager can read students in own property" on students
   );
 
 -- ── PAYMENTS ──
+drop policy if exists "Admin full access to payments" on payments;
 create policy "Admin full access to payments" on payments
   for all using (is_admin());
 
+drop policy if exists "Manager can read payments in own property" on payments;
 create policy "Manager can read payments in own property" on payments
   for select using (
     is_admin() or
@@ -293,6 +376,7 @@ create policy "Manager can read payments in own property" on payments
     )
   );
 
+drop policy if exists "Manager can insert payments" on payments;
 create policy "Manager can insert payments" on payments
   for insert with check (
     is_admin() or
@@ -304,9 +388,11 @@ create policy "Manager can insert payments" on payments
   );
 
 -- ── MONTHLY OBLIGATIONS ──
+drop policy if exists "Admin full access to obligations" on monthly_obligations;
 create policy "Admin full access to obligations" on monthly_obligations
   for all using (is_admin());
 
+drop policy if exists "Manager can read own property obligations" on monthly_obligations;
 create policy "Manager can read own property obligations" on monthly_obligations
   for select using (
     is_admin() or
@@ -317,10 +403,28 @@ create policy "Manager can read own property obligations" on monthly_obligations
     )
   );
 
+-- ── STUDENT TRANSFERS ──
+drop policy if exists "Admin full access to transfers" on student_transfers;
+create policy "Admin full access to transfers" on student_transfers
+  for all using (is_admin());
+
+drop policy if exists "Manager can read own property transfers" on student_transfers;
+create policy "Manager can read own property transfers" on student_transfers
+  for select using (
+    is_admin() or
+    student_id in (
+      select s.id from students s
+      join rooms r on r.id = s.room_id
+      where r.property_id = my_property_id()
+    )
+  );
+
 -- ── PROFILES ──
+drop policy if exists "Users can read own profile" on profiles;
 create policy "Users can read own profile" on profiles
   for select using (id = auth.uid() or is_admin());
 
+drop policy if exists "Admin can manage all profiles" on profiles;
 create policy "Admin can manage all profiles" on profiles
   for all using (is_admin());
 
@@ -347,3 +451,25 @@ left join monthly_obligations mo
   on mo.student_id = s.id
   and mo.month = date_trunc('month', current_date)::date
 group by p.id, p.name, p.color_accent;
+
+-- ═══════════════════════════════════════════════════════════
+-- ROLE GRANTS  (CRITICAL after a `drop schema public cascade`)
+-- ═══════════════════════════════════════════════════════════
+-- Dropping & recreating the public schema wipes the default privileges Supabase
+-- pre-configures, so the anon/authenticated/service_role roles end up with NO
+-- table privileges -> "permission denied for table" (403) on every query, before
+-- RLS is even consulted. Re-grant table/sequence/function access (RLS still
+-- governs which ROWS each user sees) and restore default privileges so future
+-- tables are covered too.
+grant usage on schema public to anon, authenticated, service_role;
+
+grant all on all tables    in schema public to anon, authenticated, service_role;
+grant all on all sequences in schema public to anon, authenticated, service_role;
+grant all on all functions in schema public to anon, authenticated, service_role;
+
+alter default privileges in schema public
+  grant all on tables to anon, authenticated, service_role;
+alter default privileges in schema public
+  grant all on sequences to anon, authenticated, service_role;
+alter default privileges in schema public
+  grant all on functions to anon, authenticated, service_role;

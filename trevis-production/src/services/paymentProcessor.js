@@ -20,6 +20,7 @@
  */
 
 import * as RentCycleCalculator from './rentCycleCalculator.js';
+import { parseLocalDate } from './dateUtil.js';
 
 /**
  * Process payment and calculate billing cycle updates
@@ -88,9 +89,13 @@ export function processPayment(payment, student) {
   const coverage = RentCycleCalculator.calculateCoverage(amount, monthly_rent);
 
   // CRITICAL: Determine coverage start date
-  // This is where early payment detection and prepaid day preservation happens
-  const paymentDate = new Date(payment_date);
-  const existingCoverageEnd = coverage_end ? new Date(coverage_end) : null;
+  // This is where early payment detection and prepaid day preservation happens.
+  // parseLocalDate, not new Date(): 'YYYY-MM-DD' parses as UTC midnight, which
+  // lands on the PREVIOUS local day in negative-offset timezones — an off-by-one
+  // in early-payment detection and every derived date. Calendar days must be
+  // built in local time (same rule as the rest of the engine).
+  const paymentDate = parseLocalDate(payment_date);
+  const existingCoverageEnd = coverage_end ? parseLocalDate(coverage_end) : null;
 
   let coverageStartDate;
   let isEarlyPayment = false;
@@ -128,7 +133,7 @@ export function processPayment(payment, student) {
   // For normal payments or first payment, set anchor to payment date
   let billingAnchorDate;
   if (isEarlyPayment && billing_anchor_date) {
-    billingAnchorDate = new Date(billing_anchor_date);
+    billingAnchorDate = parseLocalDate(billing_anchor_date);
   } else {
     billingAnchorDate = paymentDate;
   }
@@ -200,9 +205,12 @@ export function generatePaymentPreview(amount, student) {
   // Calculate coverage
   const coverage = RentCycleCalculator.calculateCoverage(amount, monthly_rent);
   
-  // Use current date as payment date for preview
-  const paymentDate = new Date();
-  const existingCoverageEnd = coverage_end ? new Date(coverage_end) : null;
+  // Use TODAY (local midnight) as the preview payment date. Must be date-only:
+  // a time-of-day `new Date()` compared against a midnight coverage_end made the
+  // preview disagree with processPayment for a payment on the exact day coverage
+  // ends (preview said "normal", processing said "early").
+  const paymentDate = parseLocalDate(new Date());
+  const existingCoverageEnd = coverage_end ? parseLocalDate(coverage_end) : null;
 
   let coverageStart;
   let isEarlyPayment = false;

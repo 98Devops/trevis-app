@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect, useRef } from "react";
-import { T, font, fmt, Badge, CoverageBar, Stat, Bar, Btn, DateRangeFilter, isUnassignedRecord, filterUnassignedRecords, countOccupiedBeds, getDisplayName } from "./p2_helpers.jsx";
-import { classifyStudent, getStatusBadgeConfig } from "../services/statusClassifier.js";
+import { useState, useMemo, useEffect } from "react";
+import { T, font, fmt, Badge, CoverageBar, Stat, Bar, Btn, isUnassignedRecord, getDisplayName } from "./p2_helpers.jsx";
+import { classifyStudent } from "../services/statusClassifier.js";
 import * as CoverageDB from "../services/coverageDatabaseService.js";
 import { debug } from "../lib/debug.js";
 
