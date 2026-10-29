@@ -1,5 +1,6 @@
 <div align="center">
-  <h1>PropNest</h1>
+  <h1>Trevis(Commercially as Propnest)
+  </h1>
   <p><strong>Property management for student housing, lodges, short-stays and rentals — built around a single, ledger-derived coverage engine.</strong></p>
 </div>
 
